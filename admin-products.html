@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ROUGE — Product &amp; Image Manager</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0c0c0c;--panel:#161616;--line:#2a2a2a;--red:#c02032;--text:#f2ede9;--muted:#9a9390}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:400 14px/1.5 Manrope,sans-serif}
+  h1,h2{font-family:'Cormorant Garamond',serif;font-weight:600;margin:0}
+  header{display:flex;align-items:center;justify-content:space-between;padding:22px 32px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:10}
+  header h1{font-size:1.8rem;color:var(--red)}
+  header span{font-size:.7rem;letter-spacing:.15em;color:var(--muted)}
+  main{padding:32px;max-width:1200px;margin:0 auto}
+  section{margin-bottom:56px}
+  section h2{font-size:1.5rem;margin-bottom:4px}
+  .hint{color:var(--muted);font-size:.78rem;margin-bottom:18px}
+  .btn{background:var(--red);color:#fff;border:none;padding:10px 18px;border-radius:4px;font:600 .72rem/1 Manrope,sans-serif;letter-spacing:.08em;cursor:pointer}
+  .btn.secondary{background:#2a2a2a;color:#ddd}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:#ddd}
+  .btn:disabled{opacity:.5;cursor:default}
+  .toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+  table{width:100%;border-collapse:collapse}
+  th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;font-size:.82rem;vertical-align:middle}
+  th{color:var(--muted);font-weight:600;font-size:.68rem;letter-spacing:.08em;text-transform:uppercase}
+  tr:hover td{background:#141414}
+  img.thumb{width:46px;height:58px;object-fit:cover;border-radius:3px;background:#222}
+  .status-pill{display:inline-block;padding:3px 9px;border-radius:20px;font-size:.62rem;letter-spacing:.06em}
+  .status-active{background:#1e3d24;color:#7fdc94}
+  .status-inactive{background:#3d1e1e;color:#dc7f7f}
+  .row-actions button{margin-right:6px}
+  .icon-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  .icon-card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:16px}
+  .icon-card img{width:100%;height:150px;object-fit:cover;border-radius:4px;background:#222;margin-bottom:10px}
+  .icon-card label{display:block;font-size:.65rem;letter-spacing:.08em;color:var(--muted);margin:8px 0 4px}
+  .icon-card input,.icon-card select{width:100%;background:#0c0c0c;border:1px solid var(--line);color:var(--text);padding:8px;border-radius:4px;font:inherit}
+  .icon-card .btn{width:100%;margin-top:12px}
+
+  #loginGate{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:999}
+  #loginGate input{padding:12px 14px;border-radius:4px;border:1px solid var(--line);background:#161616;color:var(--text);font:inherit;width:260px}
+
+  .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:100}
+  .modal-backdrop.open{display:flex}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:26px;width:min(560px,92vw);max-height:88vh;overflow-y:auto}
+  .modal h3{font-family:'Cormorant Garamond',serif;font-size:1.5rem;margin-bottom:16px}
+  .field{margin-bottom:14px}
+  .field label{display:block;font-size:.65rem;letter-spacing:.08em;color:var(--muted);margin-bottom:5px;text-transform:uppercase}
+  .field input,.field select,.field textarea{width:100%;background:#0c0c0c;border:1px solid var(--line);color:var(--text);padding:9px 10px;border-radius:4px;font:inherit}
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .modal-actions{display:flex;gap:10px;margin-top:8px;position:sticky;bottom:0;background:var(--panel);padding-top:10px}
+  .modal-actions .btn{flex:1}
+  #toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%);background:#1a1a1a;color:#fff;padding:11px 20px;border-radius:4px;font-size:.78rem;letter-spacing:.03em;opacity:0;transition:opacity .25s;z-index:200}
+  .empty{color:var(--muted);padding:30px 0;text-align:center;font-size:.8rem}
+</style>
+</head>
+<body>
+
+<div id="loginGate">
+  <h1 style="color:#c02032">ROUGE</h1>
+  <p style="color:#9a9390;font-size:.8rem">Enter the edit password to manage products and images</p>
+  <input id="pwInput" type="password" placeholder="Password" />
+  <button class="btn" id="pwSubmit">ENTER</button>
+</div>
+
+<header>
+  <h1>ROUGE — Product &amp; Image Manager</h1>
+  <span>site content stays untouched here — this only manages products &amp; images</span>
+</header>
+
+<main>
+  <section>
+    <div class="toolbar">
+      <div>
+        <h2>Products</h2>
+        <p class="hint">Where a product shows (New In / Collections / Dresses / Clothing / Accessories) is set automatically from Category + Featured.</p>
+      </div>
+      <button class="btn" id="addProductBtn">+ ADD PRODUCT</button>
+    </div>
+    <table>
+      <thead><tr><th></th><th>Title</th><th>Category</th><th>Price</th><th>Stock</th><th>Status</th><th></th></tr></thead>
+      <tbody id="productRows"><tr><td colspan="7" class="empty">Loading products…</td></tr></tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Homepage Collection Cards</h2>
+    <p class="hint">The 3 big cards on the homepage ("The Rouge Collection" strip).</p>
+    <div class="icon-grid" id="homepageImages"></div>
+  </section>
+
+  <section>
+    <h2>Collections Page Cards</h2>
+    <p class="hint">The 3 big tiles on the Collections page.</p>
+    <div class="icon-grid" id="collectionImages"></div>
+  </section>
+</main>
+
+<div class="modal-backdrop" id="productModalBackdrop">
+  <div class="modal">
+    <h3 id="productModalTitle">Add Product</h3>
+    <div class="grid-2">
+      <div class="field"><label>Title</label><input id="f_title"></div>
+      <div class="field"><label>Category</label>
+        <select id="f_category">
+          <option>Dresses</option><option>Clothing</option><option>Accessories</option><option>Evening</option>
+        </select>
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="field"><label>Price (EGP)</label><input id="f_price" type="number"></div>
+      <div class="field"><label>Stock</label><input id="f_stock" type="number"></div>
+    </div>
+    <div class="field"><label>Description</label><textarea id="f_description" rows="3"></textarea></div>
+    <div class="grid-2">
+      <div class="field"><label>Color</label><input id="f_color"></div>
+      <div class="field"><label>Sizes (comma separated)</label><input id="f_sizes" placeholder="XS, S, M, L, XL"></div>
+    </div>
+    <div class="field"><label>Image 1 URL / Drive link</label><input id="f_image1"></div>
+    <div class="field"><label>Image 2 URL / Drive link</label><input id="f_image2"></div>
+    <div class="field"><label>Image 3 URL / Drive link</label><input id="f_image3"></div>
+    <div class="grid-2">
+      <div class="field"><label>Featured (New In)</label><select id="f_featured"><option value="false">No</option><option value="true">Yes</option></select></div>
+      <div class="field"><label>Status</label><select id="f_status"><option>Active</option><option>Inactive</option></select></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn secondary" id="cancelProductBtn">CANCEL</button>
+      <button class="btn" id="saveProductBtn">SAVE</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const ROUGE_API_URL = 'https://script.google.com/macros/s/AKfycbwLnGjb7qiKsGNmkfkxhQGZ7xFC4pus8Ur2NHi9pMM-vdo8MMReg1KfwQq78ranPuUe/exec';
+let PASSWORD = (sessionStorage.getItem('rougeAdminPassword') || '').trim();
+let PRODUCTS = [];
+
+function getDriveId(v){const s=String(v||'').trim();const p=[/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/,/[?&]id=([a-zA-Z0-9_-]+)/,/drive\.google\.com\/thumbnail\?id=([a-zA-Z0-9_-]+)/];for(const re of p){const m=s.match(re);if(m)return m[1]}return''}
+function normalizeImageUrl(v){const s=String(v||'').trim();if(!s)return'';const id=getDriveId(s);return id?`https://drive.google.com/thumbnail?id=${id}&sz=w800`:s}
+
+function toast(msg, isError){
+  const t=document.getElementById('toast');
+  t.style.background=isError?'#7a1a1a':'#1a1a1a';
+  t.textContent=msg; t.style.opacity='1';
+  clearTimeout(t._timer); t._timer=setTimeout(()=>t.style.opacity='0',2400);
+}
+
+function jsonp(action){
+  return new Promise((resolve)=>{
+    const cb='__adminCb_'+Date.now()+'_'+Math.random().toString(36).slice(2);
+    const script=document.createElement('script');
+    const cleanup=()=>{try{delete window[cb]}catch(e){window[cb]=undefined}script.remove()};
+    const timeout=setTimeout(()=>{cleanup();resolve({success:false,error:'timeout'})},15000);
+    window[cb]=(data)=>{clearTimeout(timeout);cleanup();resolve(data)};
+    script.onerror=()=>{clearTimeout(timeout);cleanup();resolve({success:false,error:'network error'})};
+    script.src=`${ROUGE_API_URL}?action=${action}&callback=${encodeURIComponent(cb)}&_=${Date.now()}`;
+    document.head.appendChild(script);
+  });
+}
+
+async function post(action, fields){
+  return new Promise((resolve) => {
+    const cb = '__adminSave_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+    const script = document.createElement('script');
+    let settled = false;
+
+    const finish = (data) => {
+      if (settled) return;
+      settled = true;
+      try { delete window[cb]; } catch (e) { window[cb] = undefined; }
+      script.remove();
+      if (!data.success && data.error === 'Invalid password') {
+        sessionStorage.removeItem('rougeAdminPassword');
+        document.getElementById('loginGate').style.display='flex';
+      }
+      resolve(data);
+    };
+
+    const timeout = setTimeout(() => {
+      finish({ success:false, error:'Request timed out — check your internet connection and try again' });
+    }, 25000);
+
+    window[cb] = (data) => { clearTimeout(timeout); finish(data); };
+    script.onerror = () => { clearTimeout(timeout); finish({ success:false, error:'Could not reach the ROUGE API (open the console for details)' }); };
+
+    const params = new URLSearchParams({ action, password: PASSWORD, callback: cb, _: Date.now(), ...fields });
+    script.src = `${ROUGE_API_URL}?${params.toString()}`;
+    document.head.appendChild(script);
+  });
+}
+
+/* ---------- login ---------- */
+document.getElementById('pwSubmit').onclick = () => {
+  PASSWORD = document.getElementById('pwInput').value.trim();
+  sessionStorage.setItem('rougeAdminPassword', PASSWORD);
+  document.getElementById('loginGate').style.display='none';
+  loadEverything();
+};
+document.getElementById('pwInput').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('pwSubmit').click(); });
+
+if (PASSWORD) { document.getElementById('loginGate').style.display='none'; loadEverything(); }
+
+/* ---------- products ---------- */
+async function loadProducts(){
+  const data = await jsonp('products');
+  PRODUCTS = (data && data.success) ? data.products : [];
+  renderProducts();
+}
+
+function renderProducts(){
+  const tbody = document.getElementById('productRows');
+  if (!PRODUCTS.length){ tbody.innerHTML='<tr><td colspan="7" class="empty">No products yet.</td></tr>'; return; }
+  tbody.innerHTML = PRODUCTS.map(p => `
+    <tr>
+      <td><img class="thumb" src="${normalizeImageUrl(p.images && p.images[0])}" onerror="this.style.opacity=0"></td>
+      <td>${escapeHtml(p.title)}</td>
+      <td>${escapeHtml(p.category)}</td>
+      <td>EGP ${Number(p.price||0).toLocaleString()}</td>
+      <td>${p.stock}</td>
+      <td><span class="status-pill ${String(p.status).toLowerCase()==='active'?'status-active':'status-inactive'}">${escapeHtml(p.status||'Active')}</span></td>
+      <td class="row-actions">
+        <button class="btn ghost" onclick="editProduct('${p.id}')">EDIT</button>
+        <button class="btn ghost" onclick="deleteProductRow('${p.id}')">DELETE</button>
+      </td>
+    </tr>`).join('');
+}
+
+function escapeHtml(v){ return String(v??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+let editingId = null;
+function openProductModal(){ document.getElementById('productModalBackdrop').classList.add('open'); }
+function closeProductModal(){ document.getElementById('productModalBackdrop').classList.remove('open'); }
+
+document.getElementById('addProductBtn').onclick = () => {
+  editingId = null;
+  document.getElementById('productModalTitle').textContent = 'Add Product';
+  ['f_title','f_price','f_stock','f_description','f_color','f_sizes','f_image1','f_image2','f_image3'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('f_category').value='Dresses';
+  document.getElementById('f_featured').value='false';
+  document.getElementById('f_status').value='Active';
+  openProductModal();
+};
+
+window.editProduct = function(id){
+  const p = PRODUCTS.find(x => String(x.id) === String(id));
+  if (!p) return;
+  editingId = p.externalId || p.id;
+  document.getElementById('productModalTitle').textContent = 'Edit Product';
+  document.getElementById('f_title').value = p.title || p.name || '';
+  document.getElementById('f_category').value = p.category || 'Dresses';
+  document.getElementById('f_price').value = p.price || 0;
+  document.getElementById('f_stock').value = p.stock || 0;
+  document.getElementById('f_description').value = p.description || '';
+  document.getElementById('f_color').value = p.color || '';
+  document.getElementById('f_sizes').value = (p.sizes||[]).join(', ');
+  document.getElementById('f_image1').value = (p.originalImages && p.originalImages[0]) || (p.images && p.images[0]) || '';
+  document.getElementById('f_image2').value = (p.originalImages && p.originalImages[1]) || '';
+  document.getElementById('f_image3').value = (p.originalImages && p.originalImages[2]) || '';
+  document.getElementById('f_featured').value = p.featured ? 'true' : 'false';
+  document.getElementById('f_status').value = p.status || 'Active';
+  openProductModal();
+};
+
+window.deleteProductRow = async function(id){
+  const p = PRODUCTS.find(x => String(x.id) === String(id));
+  if (!p) return;
+  if (!confirm(`Delete "${p.title||p.name}"? This removes it from every page.`)) return;
+  const data = await post('deleteProduct', { id: p.externalId || p.id });
+  if (data.success){ toast('Product deleted'); loadProducts(); }
+  else toast('Error: ' + (data.error||'could not delete'), true);
+};
+
+document.getElementById('cancelProductBtn').onclick = closeProductModal;
+document.getElementById('saveProductBtn').onclick = async () => {
+  const btn = document.getElementById('saveProductBtn');
+  const product = {
+    id: editingId || '',
+    title: document.getElementById('f_title').value.trim(),
+    category: document.getElementById('f_category').value,
+    price: document.getElementById('f_price').value,
+    stock: document.getElementById('f_stock').value,
+    description: document.getElementById('f_description').value.trim(),
+    color: document.getElementById('f_color').value.trim(),
+    sizes: document.getElementById('f_sizes').value.trim(),
+    image1: document.getElementById('f_image1').value.trim(),
+    image2: document.getElementById('f_image2').value.trim(),
+    image3: document.getElementById('f_image3').value.trim(),
+    featured: document.getElementById('f_featured').value === 'true',
+    status: document.getElementById('f_status').value
+  };
+  if (!product.title){ toast('Title is required', true); return; }
+  btn.disabled = true; btn.textContent = 'SAVING…';
+  try {
+    const data = await post('saveProduct', product);
+    if (data.success){ toast('Saved ✓'); closeProductModal(); loadProducts(); }
+    else toast('Error: ' + (data.error||'could not save'), true);
+  } catch (err) {
+    console.error(err);
+    toast('Unexpected error — see console (F12)', true);
+  } finally {
+    btn.disabled = false; btn.textContent = 'SAVE';
+  }
+};
+
+/* ---------- homepage / collection image cards ---------- */
+const IMAGE_KEYS = [
+  { key: 'dresses', label: 'Dresses' },
+  { key: 'clothing', label: 'Clothing' },
+  { key: 'accessories', label: 'Accessories' }
+];
+
+async function loadImageSet(action, containerId, saveAction){
+  const data = await jsonp(action);
+  const images = (data && data.success) ? data.images : {};
+  const container = document.getElementById(containerId);
+  container.innerHTML = IMAGE_KEYS.map(({key,label}) => {
+    const entry = images[key] || { image:'', alt:'', title:'' };
+    return `
+    <div class="icon-card" data-key="${key}">
+      <img src="${normalizeImageUrl(entry.image)}" onerror="this.style.opacity=0">
+      <label>${label} — Image URL / Drive link</label>
+      <input class="i-image" value="${escapeHtml(entry.image)}">
+      <label>Title</label>
+      <input class="i-title" value="${escapeHtml(entry.title)}">
+      <label>Alt text</label>
+      <input class="i-alt" value="${escapeHtml(entry.alt)}">
+      <label>Status</label>
+      <select class="i-status"><option ${entry.status!=='inactive'?'selected':''}>Active</option><option ${entry.status==='inactive'?'selected':''}>Inactive</option></select>
+      <button class="btn">SAVE ${label.toUpperCase()}</button>
+    </div>`;
+  }).join('');
+
+  container.querySelectorAll('.icon-card').forEach(card => {
+    const key = card.dataset.key;
+    const img = card.querySelector('img');
+    const imageInput = card.querySelector('.i-image');
+    imageInput.addEventListener('input', () => { img.src = normalizeImageUrl(imageInput.value.trim()); });
+    card.querySelector('.btn').onclick = async () => {
+      const btn = card.querySelector('.btn');
+      const payload = {
+        key,
+        image: imageInput.value.trim(),
+        title: card.querySelector('.i-title').value.trim(),
+        alt: card.querySelector('.i-alt').value.trim(),
+        status: card.querySelector('.i-status').value
+      };
+      btn.disabled = true;
+      try {
+        const data = await post(saveAction, payload);
+        if (data.success) toast('Saved ✓');
+        else toast('Error: ' + (data.error||'could not save'), true);
+      } catch (err) {
+        console.error(err);
+        toast('Unexpected error — see console (F12)', true);
+      } finally {
+        btn.disabled = false;
+      }
+    };
+  });
+}
+
+function loadEverything(){
+  loadProducts();
+  loadImageSet('homepageImages', 'homepageImages', 'saveHomepageImage');
+  loadImageSet('collectionImages', 'collectionImages', 'saveCollectionImage');
+}
+</script>
+</body>
+</html>

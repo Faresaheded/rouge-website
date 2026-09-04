@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="ROUGE — a cinematic women's fashion atelier." />
+  <title>ROUGE — The New Collection</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Manrope:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+<style>[data-homepage-title]{white-space:pre-line}</style></head>
+<body>
+  <div class="cursor-glow"></div>
+  <div class="loader" id="loader"><span>ROUGE</span></div>
+
+  <header class="nav" id="nav">
+    <a class="brand" href="#top">ROUGE</a>
+    <nav class="desktop-nav">
+      <a href="collections.html">NEW IN</a>
+      <a href="collections.html">COLLECTIONS</a>
+      <a href="dresses.html">DRESSES</a>
+      <a href="clothing.html">CLOTHING</a>
+      <a href="accessories.html">ACCESSORIES</a>
+      <a href="about.html">ABOUT</a>
+    </nav>
+    <div class="nav-actions">
+      <button aria-label="Search" class="icon-btn" id="searchBtn">⌕</button>
+      <a aria-label="Account" class="icon-btn" href="account.html">♙</a><a aria-label="Wishlist" class="icon-btn" href="wishlist.html">♡</a>
+      <button class="bag-btn" id="bagBtn">BAG <span id="bagCount">0</span></button>
+      <button class="menu-btn" id="menuBtn">☰</button>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="hero" id="new">
+      <div class="hero-bg" data-ck="index.hero.bg" data-ck-type="image"></div>
+      <div class="hero-overlay"></div>
+      <div class="side-index"><span class="active">01</span><i></i><span>02</span><span>03</span><span>04</span></div>
+      <div class="hero-copy reveal">
+        <p class="eyebrow" data-ck="index.hero.eyebrow">THE NEW COLLECTION</p>
+        <h1 data-ck="index.hero.title">ROUGE</h1>
+        <p class="subtitle" data-ck="index.hero.subtitle">A STUDY IN CONTRAST</p>
+        <p class="hero-description" data-ck="index.hero.description" data-ck-type="html">Timeless elegance. Bold femininity.<br/>Designed to be unforgettable.</p>
+        <a class="magnetic-cta" href="#collections"><span class="cta-circle">↗</span><span>EXPLORE COLLECTION</span></a>
+      </div>
+      <div class="hero-film"><button class="play">▶</button><span>PLAY FILM</span></div>
+      <div class="scroll-indicator">SCROLL <span></span></div>
+      <div class="season">SPRING / SUMMER 2026</div>
+    </section>
+
+    <section class="collection-strip" id="collections">
+      <div class="collection-intro">
+        <span data-ck="index.collectionIntro.eyebrow">OUR EDIT</span>
+        <h2 data-ck="index.collectionIntro.heading" data-ck-type="html">The Rouge<br/>Collection</h2>
+        <a href="collections.html">VIEW ALL COLLECTIONS →</a>
+      </div>
+      <article class="collection-card" data-filter="Dresses" data-homepage-card="dresses"><img data-homepage-image="dresses" src="assets/hero.png" alt="White dress editorial"/><div><small>01</small><h3 data-homepage-title="dresses">THE WHITE
+SILHOUETTE</h3><button>SHOP NOW →</button></div></article>
+      <article class="collection-card dark-card" data-filter="Evening" data-homepage-card="clothing"><img data-homepage-image="clothing" src="assets/hero.png" alt="Clothing editorial"/><div><small>02</small><h3 data-homepage-title="clothing">AFTER
+DARK</h3><button>SHOP NOW →</button></div></article>
+      <article class="collection-card red-card" data-filter="Signature" data-homepage-card="accessories"><img data-homepage-image="accessories" src="assets/hero.png" alt="Accessories editorial"/><div><small>03</small><h3 data-homepage-title="accessories">SIGNATURE
+RED</h3><button>SHOP NOW →</button></div></article>
+    </section>
+
+    <section class="manifesto" id="about">
+      <p class="eyebrow" data-ck="index.manifesto.eyebrow">THE ROUGE PHILOSOPHY</p>
+      <h2 data-ck="index.manifesto.heading" data-ck-type="html">Fashion should<br/><em>leave a trace.</em></h2>
+      <p data-ck="index.manifesto.paragraph">ROUGE is an expression of contrast — softness and strength, light and shadow, ivory and crimson. Every silhouette is designed to feel personal, powerful and unmistakably yours.</p>
+    </section>
+
+    <section class="products" id="products">
+      <div class="section-heading"><div><span class="eyebrow">CURATED FOR YOU</span><h2>The Edit</h2></div><a href="collections.html">VIEW ALL →</a></div>
+      <div class="product-grid" id="productGrid"></div>
+    </section>
+
+    <section class="newsletter">
+      <div><span class="eyebrow">PRIVATE ACCESS</span><h2>Enter the world<br/><em>of ROUGE.</em></h2></div>
+      <form id="newsletterForm"><input type="email" placeholder="Your email address" required/><button>JOIN →</button></form>
+    </section>
+  </main>
+
+  <footer id="footer">
+    <div class="footer-brand">ROUGE</div>
+    <div><span>CLIENT SERVICES</span><a href="shipping.html">Shipping</a><a href="returns.html">Returns</a><a href="size-guide.html">Size Guide</a><a href="contact.html">Contact</a><a href="faq.html">FAQ</a></div>
+    <div><span>FOLLOW</span><a href="journal.html">Journal</a><a href="collections.html">Collections</a><a href="about.html">The House</a></div>
+    <div><span>LEGAL</span><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="cookies.html">Cookies</a></div>
+    <p class="copyright">© 2026 ROUGE ATELIER. ALL RIGHTS RESERVED.</p>
+  </footer>
+
+  <aside class="cart-drawer" id="cartDrawer">
+    <div class="drawer-head"><h2>Your Bag</h2><button id="closeBag">×</button></div>
+    <div id="cartItems" class="cart-items"><p class="empty">Your bag is empty.</p></div>
+    <div class="cart-total"><span>TOTAL</span><strong id="cartTotal">EGP 0</strong></div>
+    <button class="checkout">CHECKOUT →</button>
+  </aside>
+  <div class="drawer-backdrop" id="backdrop"></div>
+
+  <div class="search-modal" id="searchModal"><button id="closeSearch">×</button><p>SEARCH ROUGE</p><input id="searchInput" type="search" placeholder="Search dresses, collections..."/></div>
+
+  <script src="rouge-data.js?v=20260819-v48"></script><script src="rouge-content.js?v=20260823a"></script><script src="rouge-edit.js?v=20260823a"></script>
+<script>
+(function loadHomepageImages(){
+  const API = window.ROUGE_API_URL || 'https://script.google.com/macros/s/AKfycbwLnGjb7qiKsGNmkfkxhQGZ7xFC4pus8Ur2NHi9pMM-vdo8MMReg1KfwQq78ranPuUe/exec';
+  const fallback = {
+    dresses: { image: 'assets/hero.png', alt: 'White dress editorial' },
+    clothing: { image: 'assets/hero.png', alt: 'Clothing editorial' },
+    accessories: { image: 'assets/hero.png', alt: 'Accessories editorial' }
+  };
+
+  function apply(data){
+    if(!data || !data.success || !data.images) return;
+    document.querySelectorAll('[data-homepage-image]').forEach(img=>{
+      const key = img.dataset.homepageImage;
+      const item = data.images[key];
+      if(!item || !item.image) return;
+      // The API may return a normal Google Drive sharing URL.
+      // <img> cannot render the /file/d/.../view page directly, so convert it
+      // to a browser-renderable Drive thumbnail URL first.
+      const imageUrl = normalizeHomepageImageUrl(item.image);
+      if(!imageUrl) return;
+
+      img.src = imageUrl + (imageUrl.indexOf('?') >= 0 ? '&' : '?') + 'v=' + Date.now();
+      img.onerror = () => {
+        // Fallback to the original URL in case the thumbnail endpoint is unavailable.
+        if (img.dataset.originalImage && img.src !== img.dataset.originalImage) {
+          img.onerror = null;
+          img.src = img.dataset.originalImage;
+        }
+      };
+      img.dataset.originalImage = item.image;
+      if(item.alt) img.alt = item.alt;
+      const title = document.querySelector('[data-homepage-title=\"' + key + '\"]');
+      if(title && item.title) title.textContent = String(item.title).replace(/\\n/g, '\n');
+    });
+  }
+
+  function normalizeHomepageImageUrl(value){
+    const s = String(value || '').trim();
+    if(!s) return '';
+
+    // Google Drive: /file/d/FILE_ID/view, /open?id=FILE_ID,
+    // /uc?id=FILE_ID, or /thumbnail?id=FILE_ID.
+    if(/drive\.google\.com/i.test(s)){
+      let id = '';
+      let match = s.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/i);
+      if(match) id = match[1];
+
+      if(!id){
+        match = s.match(/[?&]id=([a-zA-Z0-9_-]+)/i);
+        if(match) id = match[1];
+      }
+
+      if(id){
+        return 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(id) + '&sz=w1600';
+      }
+    }
+
+    return s;
+  }
+
+  const callbackName = '__rougeHomepageImages_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+  const script = document.createElement('script');
+  const cleanup = ()=>{ try{delete window[callbackName]}catch(e){} script.remove(); };
+  const timeout = setTimeout(cleanup, 10000);
+  window[callbackName] = data=>{ clearTimeout(timeout); apply(data); cleanup(); };
+  script.onerror = cleanup;
+  script.src = `${API}?action=homepageImages&callback=${encodeURIComponent(callbackName)}&_=${Date.now()}`;
+  document.head.appendChild(script);
+})();
+</script>
+<script src="script.js"></script></body>
+</html>
