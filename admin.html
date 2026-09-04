@@ -1,1 +1,252 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta name="description" content="ROUGE — Luxury women's fashion atelier."><title>Admin Dashboard — ROUGE</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Manrope:wght@300;400;500;600&display=swap" rel="stylesheet"><link rel="stylesheet" href="rouge-v4.css"></head><body><div class="cursor-glow"></div><div id="pageLoader"><span class="loader-word">ROUGE</span></div><header class="site-nav" id="siteNav"><a class="brand" href="index.html">ROUGE</a><nav class="desktop-nav"><a href="new-in.html">NEW IN</a><a href="collections.html">COLLECTIONS</a><a href="dresses.html">DRESSES</a><a href="clothing.html">CLOTHING</a><a href="accessories.html">ACCESSORIES</a><a href="about.html">ABOUT</a></nav><div class="nav-actions"><button class="icon-btn" id="searchButton">⌕</button><a class="icon-btn" href="account.html" aria-label="Account">♙</a><a class="icon-btn" href="wishlist.html" aria-label="Wishlist">♡</a><button class="bag-btn" id="bagButton">BAG <span data-bag-count>0</span></button><button class="menu-btn" id="menuButton">☰</button></div></header><nav class="mobile-nav" id="mobileNav"><a href="new-in.html">NEW IN</a><a href="collections.html">COLLECTIONS</a><a href="dresses.html">DRESSES</a><a href="clothing.html">CLOTHING</a><a href="accessories.html">ACCESSORIES</a><a href="about.html">ABOUT</a><a href="account.html">ACCOUNT</a><a href="wishlist.html">WISHLIST</a></nav><main><section class="form-page"><span class="kicker">ROUGE / PRIVATE ADMIN</span><h1>Dashboard</h1><div class="admin-kpis"><div class="kpi"><span>SALES / DEMO</span><strong id="salesKpi">EGP 0</strong></div><div class="kpi"><span>ORDERS</span><strong id="ordersKpi">0</strong></div><div class="kpi"><span>PRODUCTS</span><strong>8</strong></div><div class="kpi"><span>LOW STOCK</span><strong id="stockKpi">0</strong></div></div><div class="editorial-head"><div><span class="eyebrow">ORDER MANAGEMENT</span><h2>Recent<br><em>orders.</em></h2></div></div><table class="admin-table"><thead><tr><th>ORDER</th><th>DATE</th><th>TOTAL</th><th>STATUS</th></tr></thead><tbody id="ordersTable"></tbody></table><p style="margin-top:35px;color:#756b68;font-size:.65rem;line-height:1.8">Demo admin only. The production version should add server-side authentication, roles, audit logs, inventory controls and a secure API between the storefront and Excel/Google Sheets.</p></section></main><footer><div class="footer-brand">ROUGE</div><div><span>CLIENT SERVICES</span><a href="shipping.html">Shipping</a><a href="returns.html">Returns</a><a href="size-guide.html">Size Guide</a><a href="contact.html">Contact</a><a href="faq.html">FAQ</a></div><div><span>THE HOUSE</span><a href="about.html">About ROUGE</a><a href="journal.html">Journal</a><a href="collections.html">Collections</a></div><div><span>LEGAL</span><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="cookies.html">Cookies</a></div><p class="copyright">© 2026 ROUGE ATELIER. ALL RIGHTS RESERVED.</p></footer><div class="bag-drawer" id="bagDrawer"><div class="bag-head"><h2>Your Bag</h2><button id="bagClose">×</button></div><div class="bag-items" id="bagItems"></div><div class="bag-total"><span>TOTAL</span><strong id="bagTotal">EGP 0</strong></div><a class="checkout" href="checkout.html" style="display:block;text-align:center">CHECKOUT →</a></div><div class="bag-backdrop" id="bagBackdrop"></div><div class="search-panel" id="searchPanel"><button id="searchClose">×</button><p>SEARCH ROUGE</p><input id="siteSearch" type="search" placeholder="Search dresses, collections..." autocomplete="off"><div class="search-results" id="searchResults"></div></div><script src="rouge-data.js?v=20260819-v47"></script><script src="rouge-content.js?v=20260823a"></script><script src="rouge-edit.js?v=20260823a"></script><script>onRougeReady(()=>{const orders=JSON.parse(localStorage.getItem(ordersKey)||'[]');document.querySelector('#ordersKpi').textContent=orders.length;document.querySelector('#salesKpi').textContent=money(orders.reduce((s,o)=>s+o.total,0));const low=ROUGE_PRODUCTS.filter(p=>Object.values(p.stock).some(n=>n<=2)).length;document.querySelector('#stockKpi').textContent=low;document.querySelector('#ordersTable').innerHTML=orders.length?orders.slice(0,20).map(o=>`<tr><td>${o.number}</td><td>${o.date}</td><td>${money(o.total)}</td><td class="status">${o.status}</td></tr>`).join(''):'<tr><td colspan="4">No demo orders yet.</td></tr>'});</script><script>onRougeReady(()=>{const i=document.querySelector('#siteSearch'),r=document.querySelector('#searchResults');if(i&&r)i.addEventListener('input',()=>{const q=i.value.toLowerCase().trim();r.innerHTML=q?ROUGE_PRODUCTS.filter(p=>(p.name+' '+p.category+' '+p.tag+' '+p.color).toLowerCase().includes(q)).map(p=>`<a href="product.html?id=${p.id}">${p.name} — ${money(p.price)}</a>`).join(''):'<span style="color:#766b68;font-size:.7rem;letter-spacing:.1em">SEARCH THE ROUGE EDIT</span>'});});</script></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ROUGE — Order Management</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0c0c0c;--panel:#161616;--line:#2a2a2a;--red:#c02032;--text:#f2ede9;--muted:#9a9390}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:400 14px/1.5 Manrope,sans-serif}
+  h1,h2{font-family:'Cormorant Garamond',serif;font-weight:600;margin:0}
+  header{display:flex;align-items:center;justify-content:space-between;padding:22px 32px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:10;flex-wrap:wrap;gap:10px}
+  header h1{font-size:1.8rem;color:var(--red)}
+  header nav a{color:var(--muted);font-size:.72rem;letter-spacing:.1em;text-decoration:none;margin-left:18px}
+  header nav a:hover{color:var(--text)}
+  main{padding:32px;max-width:1200px;margin:0 auto}
+  section{margin-bottom:40px}
+  section h2{font-size:1.5rem;margin-bottom:4px}
+  .hint{color:var(--muted);font-size:.78rem;margin-bottom:18px}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:36px}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:16px}
+  .kpi span{display:block;color:var(--muted);font-size:.65rem;letter-spacing:.1em;margin-bottom:6px}
+  .kpi strong{font-family:'Cormorant Garamond',serif;font-size:1.7rem;font-weight:600}
+  .btn{background:var(--red);color:#fff;border:none;padding:10px 18px;border-radius:4px;font:600 .72rem/1 Manrope,sans-serif;letter-spacing:.08em;cursor:pointer}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:#ddd}
+  .btn:disabled{opacity:.5;cursor:default}
+  table{width:100%;border-collapse:collapse}
+  th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;font-size:.8rem;vertical-align:middle}
+  th{color:var(--muted);font-weight:600;font-size:.66rem;letter-spacing:.08em;text-transform:uppercase}
+  tr:hover td{background:#141414}
+  select.status-select{background:#0c0c0c;border:1px solid var(--line);color:var(--text);padding:6px 8px;border-radius:4px;font:inherit;font-size:.75rem}
+  .status-pill{display:inline-block;padding:3px 9px;border-radius:20px;font-size:.62rem;letter-spacing:.06em}
+  .status-pending{background:#3d341e;color:#e0c27f}
+  .status-confirmed{background:#1e2e3d;color:#7fb8dc}
+  .status-shipped{background:#1e3d24;color:#7fdc94}
+  .status-cancelled{background:#3d1e1e;color:#dc7f7f}
+  #loginGate{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:999}
+  #loginGate input{padding:12px 14px;border-radius:4px;border:1px solid var(--line);background:#161616;color:var(--text);font:inherit;width:260px}
+  .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:100}
+  .modal-backdrop.open{display:flex}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:26px;width:min(520px,92vw);max-height:88vh;overflow-y:auto}
+  .modal h3{font-family:'Cormorant Garamond',serif;font-size:1.4rem;margin-bottom:14px}
+  .modal .row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line);font-size:.8rem}
+  .modal .row span:first-child{color:var(--muted)}
+  .item-line{padding:8px 0;border-bottom:1px solid var(--line);font-size:.8rem}
+  #toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%);background:#1a1a1a;color:#fff;padding:11px 20px;border-radius:4px;font-size:.78rem;letter-spacing:.03em;opacity:0;transition:opacity .25s;z-index:200}
+  .empty{color:var(--muted);padding:30px 0;text-align:center;font-size:.8rem}
+</style>
+</head>
+<body>
+
+<div id="loginGate">
+  <h1 style="color:#c02032">ROUGE</h1>
+  <p style="color:#9a9390;font-size:.8rem">Enter the edit password to view orders</p>
+  <input id="pwInput" type="password" placeholder="Password" />
+  <button class="btn" id="pwSubmit">ENTER</button>
+</div>
+
+<header>
+  <h1>ROUGE — Order Management</h1>
+  <nav><a href="admin-products.html">PRODUCT &amp; IMAGE MANAGER →</a></nav>
+</header>
+
+<main>
+  <section>
+    <div class="kpis">
+      <div class="kpi"><span>ORDERS</span><strong id="ordersKpi">0</strong></div>
+      <div class="kpi"><span>SALES</span><strong id="salesKpi">EGP 0</strong></div>
+      <div class="kpi"><span>PENDING</span><strong id="pendingKpi">0</strong></div>
+      <div class="kpi"><span>LOW STOCK</span><strong id="stockKpi">0</strong></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Orders</h2>
+    <p class="hint">Newest first. Change status inline — it saves immediately.</p>
+    <table>
+      <thead><tr><th>Order</th><th>Date</th><th>Customer</th><th>Total</th><th>Payment</th><th>Status</th><th></th></tr></thead>
+      <tbody id="orderRows"><tr><td colspan="7" class="empty">Loading orders…</td></tr></tbody>
+    </table>
+  </section>
+</main>
+
+<div class="modal-backdrop" id="orderModalBackdrop">
+  <div class="modal">
+    <h3 id="orderModalTitle">Order</h3>
+    <div class="row"><span>Email</span><span id="m_email"></span></div>
+    <div class="row"><span>Phone</span><span id="m_phone"></span></div>
+    <div class="row"><span>Address</span><span id="m_address"></span></div>
+    <div class="row"><span>City / Country</span><span id="m_city"></span></div>
+    <div class="row"><span>Payment</span><span id="m_payment"></span></div>
+    <h3 style="margin-top:18px;font-size:1.1rem">Items</h3>
+    <div id="m_items"></div>
+    <div style="margin-top:18px;text-align:right"><button class="btn ghost" id="closeOrderModal">CLOSE</button></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const ROUGE_API_URL = 'https://script.google.com/macros/s/AKfycbwLnGjb7qiKsGNmkfkxhQGZ7xFC4pus8Ur2NHi9pMM-vdo8MMReg1KfwQq78ranPuUe/exec';
+let PASSWORD = (sessionStorage.getItem('rougeAdminPassword') || '').trim();
+let ORDERS = [];
+const STATUSES = ['Pending', 'Confirmed', 'Shipped', 'Cancelled'];
+
+function money(n){ return 'EGP ' + Number(n||0).toLocaleString(); }
+function escapeHtml(v){ return String(v??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function statusClass(s){ return 'status-' + String(s||'pending').toLowerCase(); }
+
+function toast(msg, isError){
+  const t=document.getElementById('toast');
+  t.style.background=isError?'#7a1a1a':'#1a1a1a';
+  t.textContent=msg; t.style.opacity='1';
+  clearTimeout(t._timer); t._timer=setTimeout(()=>t.style.opacity='0',2400);
+}
+
+function jsonp(action){
+  return new Promise((resolve)=>{
+    const cb='__adminCb_'+Date.now()+'_'+Math.random().toString(36).slice(2);
+    const script=document.createElement('script');
+    const cleanup=()=>{try{delete window[cb]}catch(e){window[cb]=undefined}script.remove()};
+    const timeout=setTimeout(()=>{cleanup();resolve({success:false,error:'timeout'})},15000);
+    window[cb]=(data)=>{clearTimeout(timeout);cleanup();resolve(data)};
+    script.onerror=()=>{clearTimeout(timeout);cleanup();resolve({success:false,error:'network error'})};
+    script.src=`${ROUGE_API_URL}?action=${action}&callback=${encodeURIComponent(cb)}&_=${Date.now()}`;
+    document.head.appendChild(script);
+  });
+}
+
+async function authed(action, fields){
+  return new Promise((resolve) => {
+    const cb = '__adminAuth_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+    const script = document.createElement('script');
+    let settled = false;
+    const finish = (data) => {
+      if (settled) return;
+      settled = true;
+      try { delete window[cb]; } catch (e) { window[cb] = undefined; }
+      script.remove();
+      if (!data.success && data.error === 'Invalid password') {
+        sessionStorage.removeItem('rougeAdminPassword');
+        document.getElementById('loginGate').style.display='flex';
+      }
+      resolve(data);
+    };
+    const timeout = setTimeout(() => {
+      finish({ success:false, error:'Request timed out — check your connection and try again' });
+    }, 25000);
+    window[cb] = (data) => { clearTimeout(timeout); finish(data); };
+    script.onerror = () => { clearTimeout(timeout); finish({ success:false, error:'Could not reach the ROUGE API' }); };
+    const params = new URLSearchParams({ action, password: PASSWORD, callback: cb, _: Date.now(), ...(fields||{}) });
+    script.src = `${ROUGE_API_URL}?${params.toString()}`;
+    document.head.appendChild(script);
+  });
+}
+
+/* ---------- login ---------- */
+document.getElementById('pwSubmit').onclick = () => {
+  PASSWORD = document.getElementById('pwInput').value.trim();
+  sessionStorage.setItem('rougeAdminPassword', PASSWORD);
+  document.getElementById('loginGate').style.display='none';
+  loadEverything();
+};
+document.getElementById('pwInput').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('pwSubmit').click(); });
+if (PASSWORD) { document.getElementById('loginGate').style.display='none'; loadEverything(); }
+
+/* ---------- data ---------- */
+async function loadEverything(){
+  await Promise.all([loadOrders(), loadStockKpi()]);
+}
+
+async function loadOrders(){
+  const data = await authed('getOrders');
+  if (!data.success){
+    if (data.error !== 'Invalid password') toast('Error: ' + (data.error||'could not load orders'), true);
+    return;
+  }
+  ORDERS = data.orders || [];
+  renderKpis();
+  renderOrders();
+}
+
+async function loadStockKpi(){
+  const data = await jsonp('products');
+  const products = (data && data.success) ? data.products : [];
+  const low = products.filter(p => Number(p.stock||0) <= 2).length;
+  document.getElementById('stockKpi').textContent = low;
+}
+
+function renderKpis(){
+  document.getElementById('ordersKpi').textContent = ORDERS.length;
+  document.getElementById('salesKpi').textContent = money(ORDERS.reduce((s,o)=>s+Number(o.total||0),0));
+  document.getElementById('pendingKpi').textContent = ORDERS.filter(o=>String(o.status).toLowerCase()==='pending').length;
+}
+
+function renderOrders(){
+  const tbody = document.getElementById('orderRows');
+  if (!ORDERS.length){ tbody.innerHTML = '<tr><td colspan="7" class="empty">No orders yet.</td></tr>'; return; }
+  tbody.innerHTML = ORDERS.map((o,i) => `
+    <tr>
+      <td>${escapeHtml(o.orderNumber)}</td>
+      <td>${escapeHtml(o.date)}</td>
+      <td>${escapeHtml(o.fullName)}<br><span style="color:var(--muted);font-size:.72rem">${escapeHtml(o.email)}</span></td>
+      <td>${money(o.total)}</td>
+      <td>${escapeHtml(o.payment)}</td>
+      <td>
+        <select class="status-select" data-index="${i}">
+          ${STATUSES.map(s=>`<option value="${s}" ${s===o.status?'selected':''}>${s}</option>`).join('')}
+        </select>
+      </td>
+      <td><button class="btn ghost" onclick="viewOrder(${i})">VIEW</button></td>
+    </tr>`).join('');
+
+  tbody.querySelectorAll('.status-select').forEach(sel => {
+    sel.addEventListener('change', async () => {
+      const i = Number(sel.dataset.index);
+      const order = ORDERS[i];
+      const newStatus = sel.value;
+      sel.disabled = true;
+      const data = await authed('updateOrderStatus', { orderNumber: order.orderNumber, status: newStatus });
+      sel.disabled = false;
+      if (data.success){
+        order.status = newStatus;
+        toast('Status updated ✓');
+        renderKpis();
+      } else {
+        sel.value = order.status;
+        toast('Error: ' + (data.error||'could not update'), true);
+      }
+    });
+  });
+}
+
+window.viewOrder = function(i){
+  const o = ORDERS[i];
+  if (!o) return;
+  document.getElementById('orderModalTitle').textContent = o.orderNumber;
+  document.getElementById('m_email').textContent = o.email;
+  document.getElementById('m_phone').textContent = o.phone;
+  document.getElementById('m_address').textContent = o.address;
+  document.getElementById('m_city').textContent = `${o.city}${o.postalCode ? ', ' + o.postalCode : ''} — ${o.country}`;
+  document.getElementById('m_payment').textContent = o.payment;
+  document.getElementById('m_items').innerHTML = (o.items||[]).map(it =>
+    `<div class="item-line">${escapeHtml(it.name)} × ${it.qty} <span style="color:var(--muted)">SIZE ${escapeHtml(it.size)}</span> — ${money(it.price*it.qty)}</div>`
+  ).join('') || '<p class="hint">No item detail recorded.</p>';
+  document.getElementById('orderModalBackdrop').classList.add('open');
+};
+document.getElementById('closeOrderModal').onclick = () => document.getElementById('orderModalBackdrop').classList.remove('open');
+</script>
+</body>
+</html>
