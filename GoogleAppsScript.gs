@@ -31,9 +31,9 @@ function doGet(e) {
     else if (action === 'saveHomepageImage') result = saveKeyedImageRow_(CONFIG.HOMEPAGE_IMAGES_SHEET_NAME, e.parameter);
     else if (action === 'saveCollectionImage') result = saveKeyedImageRow_(CONFIG.COLLECTIONS_IMAGES_SHEET_NAME, e.parameter);
     else if (action === 'passwordStatus') result = { success: true, passwordIsSet: !!PropertiesService.getScriptProperties().getProperty('EDIT_PASSWORD') };
-    else if (action === 'placeOrder') result = placeOrder(e.parameter);
-    else if (action === 'orders') result = getOrders(e.parameter);
-    else if (action === 'updateOrderStatus') result = updateOrderStatus(e.parameter);
+    else if (action === 'createOrder') result = createOrder((e && e.parameter) || {});
+    else if (action === 'getOrders') result = getOrders((e && e.parameter) || {});
+    else if (action === 'updateOrderStatus') result = updateOrderStatus((e && e.parameter) || {});
     else result = { success: false, error: 'Unknown action' };
 
     return jsonResponse(result, callback);
@@ -56,6 +56,9 @@ function doPost(e) {
     if (body.action === 'deleteProduct') return jsonResponse(deleteProduct(body));
     if (body.action === 'saveHomepageImage') return jsonResponse(saveKeyedImageRow_(CONFIG.HOMEPAGE_IMAGES_SHEET_NAME, body));
     if (body.action === 'saveCollectionImage') return jsonResponse(saveKeyedImageRow_(CONFIG.COLLECTIONS_IMAGES_SHEET_NAME, body));
+    if (body.action === 'createOrder') return jsonResponse(createOrder(body));
+    if (body.action === 'getOrders') return jsonResponse(getOrders(body));
+    if (body.action === 'updateOrderStatus') return jsonResponse(updateOrderStatus(body));
     return jsonResponse({ success: false, error: 'Unknown action' });
   } catch (error) {
     return jsonResponse({ success: false, error: String(error && error.message || error) });
@@ -325,6 +328,173 @@ function generateNextProductId_(sheet) {
   return 'R' + String(max + 1).padStart(3, '0');
 }
 
+/* =========================================================================
+ * ORDERS — used by checkout.html (createOrder) and admin.html (getOrders,
+ * updateOrderStatus).
+ * Sheet name: Orders
+ * Columns: Order Number | Date | Email | Phone | Full Name | Country | City
+ *          | Postal Code | Address | Payment | Items | Total | Status
+ * ========================================================================= */
+
+const ORDER_HEADERS = [
+  'Order Number', 'Date', 'Email', 'Phone', 'Full Name', 'Country', 'City',
+  'Postal Code', 'Address', 'Payment', 'Items', 'Total', 'Status'
+];
+
+/**
+ * Run once from the Apps Script editor (optional — createOrder() will also
+ * create this sheet automatically the first time an order comes in).
+ */
+function setupOrdersSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(CONFIG.ORDERS_SHEET_NAME);
+  if (!sheet) sheet = ss.insertSheet(CONFIG.ORDERS_SHEET_NAME);
+  sheet.getRange(1, 1, 1, ORDER_HEADERS.length).setValues([ORDER_HEADERS]);
+  sheet.getRange(1, 1, 1, ORDER_HEADERS.length).setFontWeight('bold');
+  sheet.setFrozenRows(1);
+  sheet.autoResizeColumns(1, ORDER_HEADERS.length);
+  sheet.setColumnWidth(9, 260);
+  sheet.setColumnWidth(11, 320);
+  return `Ready: ${CONFIG.ORDERS_SHEET_NAME}`;
+}
+
+function getOrdersSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(CONFIG.ORDERS_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(CONFIG.ORDERS_SHEET_NAME);
+    sheet.getRange(1, 1, 1, ORDER_HEADERS.length).setValues([ORDER_HEADERS]);
+    sheet.getRange(1, 1, 1, ORDER_HEADERS.length).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function generateNextOrderNumber_(sheet) {
+  const values = sheet.getDataRange().getValues();
+  let max = 0;
+  values.slice(1).forEach(row => {
+    const m = String(row[0] || '').match(/(\d+)/);
+    if (m) max = Math.max(max, Number(m[1]));
+  });
+  return 'RG-' + String(max + 1).padStart(4, '0');
+}
+
+/**
+ * Creates a new order from the checkout page. No password is required here
+ * (customers placing an order are not authenticated), but a hidden honeypot
+ * field ("website") is used to silently drop spam-bot submissions.
+ */
+function createOrder(body) {
+  // Honeypot: real visitors never fill this hidden field in.
+  if (String(body.website || '').trim()) {
+    return { success: true, orderNumber: 'RG-0000', date: new Date().toISOString() };
+  }
+
+  const email = String(body.email || '').trim();
+  const fullName = String(body.fullName || '').trim();
+  const address = String(body.address || '').trim();
+  const city = String(body.city || '').trim();
+  if (!email || !fullName || !address || !city) {
+    return { success: false, error: 'Missing required order details.' };
+  }
+
+  let items = [];
+  try { items = JSON.parse(body.items || '[]'); } catch (e) { items = []; }
+  if (!Array.isArray(items) || !items.length) {
+    return { success: false, error: 'Your bag is empty.' };
+  }
+
+  const sheet = getOrdersSheet_();
+  const orderNumber = generateNextOrderNumber_(sheet);
+  const date = new Date();
+
+  const row = [
+    orderNumber,
+    date.toISOString(),
+    email,
+    String(body.phone || '').trim(),
+    fullName,
+    String(body.country || '').trim(),
+    city,
+    String(body.postalCode || '').trim(),
+    address,
+    String(body.payment || '').trim(),
+    JSON.stringify(items),
+    Number(body.total || 0),
+    'Pending'
+  ];
+
+  sheet.getRange(sheet.getLastRow() + 1, 1, 1, ORDER_HEADERS.length).setValues([row]);
+
+  return { success: true, orderNumber, date: date.toISOString() };
+}
+
+/**
+ * Returns every order, newest first. Requires the shared edit password
+ * (same one used by the visual editor and the admin product manager).
+ */
+function getOrders(params) {
+  if (!checkEditPassword_(params.password)) return { success: false, error: 'Invalid password' };
+
+  const sheet = getOrdersSheet_();
+  const values = sheet.getDataRange().getValues();
+  if (values.length < 2) return { success: true, orders: [] };
+
+  const headers = values[0].map(h => String(h).trim());
+  const idx = {};
+  ORDER_HEADERS.forEach(h => { idx[h] = headers.indexOf(h); });
+
+  const orders = values.slice(1).map(row => {
+    let items = [];
+    try { items = JSON.parse(row[idx['Items']] || '[]'); } catch (e) { items = []; }
+    return {
+      orderNumber: String(row[idx['Order Number']] || '').trim(),
+      date: row[idx['Date']] instanceof Date ? row[idx['Date']].toISOString() : String(row[idx['Date']] || ''),
+      email: String(row[idx['Email']] || '').trim(),
+      phone: String(row[idx['Phone']] || '').trim(),
+      fullName: String(row[idx['Full Name']] || '').trim(),
+      country: String(row[idx['Country']] || '').trim(),
+      city: String(row[idx['City']] || '').trim(),
+      postalCode: String(row[idx['Postal Code']] || '').trim(),
+      address: String(row[idx['Address']] || '').trim(),
+      payment: String(row[idx['Payment']] || '').trim(),
+      items,
+      total: Number(row[idx['Total']] || 0),
+      status: String(row[idx['Status']] || 'Pending').trim()
+    };
+  }).filter(o => o.orderNumber);
+
+  orders.reverse(); // newest first (rows were appended oldest-first)
+  return { success: true, orders };
+}
+
+/**
+ * Updates the Status cell for a single order. Requires the shared edit
+ * password.
+ */
+function updateOrderStatus(params) {
+  if (!checkEditPassword_(params.password)) return { success: false, error: 'Invalid password' };
+
+  const orderNumber = String(params.orderNumber || '').trim();
+  const status = String(params.status || '').trim();
+  if (!orderNumber || !status) return { success: false, error: 'Missing orderNumber or status' };
+
+  const sheet = getOrdersSheet_();
+  const values = sheet.getDataRange().getValues();
+  const headers = values[0].map(h => String(h).trim());
+  const orderNumberIndex = headers.indexOf('Order Number');
+  const statusIndex = headers.indexOf('Status');
+
+  for (let i = 1; i < values.length; i++) {
+    if (String(values[i][orderNumberIndex] || '').trim() === orderNumber) {
+      sheet.getRange(i + 1, statusIndex + 1).setValue(status);
+      return { success: true };
+    }
+  }
+  return { success: false, error: 'Order not found.' };
+}
+
 /**
  * Shared upsert for the Homepage Images and Collection Page Images sheets
  * (both use Key | Image | Alt | Title | Status columns).
@@ -346,6 +516,10 @@ function saveKeyedImageRow_(sheetName, body) {
   const titleIndex = headers.indexOf('Title');
   const statusIndex = headers.indexOf('Status');
 
+  if (keyIndex === -1 || imageIndex === -1) {
+    return { success: false, error: `Sheet "${sheetName}" is missing Key/Image columns.` };
+  }
+
   const values = sheet.getDataRange().getValues();
   let targetRow = -1;
   for (let i = 1; i < values.length; i++) {
@@ -365,158 +539,6 @@ function saveKeyedImageRow_(sheetName, body) {
     sheet.getRange(targetRow, 1, 1, headers.length).setValues([rowData]);
   }
   return { success: true };
-}
-
-/* =========================================================================
- * ORDERS — checkout writes here, admin-products.html reads/updates here
- * Columns: OrderNumber | Date | Status | Name | Email | Phone | Country |
- *          City | PostalCode | Address | PaymentMethod | Items | Total
- * ========================================================================= */
-
-const ORDER_HEADERS = [
-  'OrderNumber', 'Date', 'Status', 'Name', 'Email', 'Phone', 'Country',
-  'City', 'PostalCode', 'Address', 'PaymentMethod', 'Items', 'Total'
-];
-
-function setupOrdersSheet() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName(CONFIG.ORDERS_SHEET_NAME);
-  if (!sheet) sheet = ss.insertSheet(CONFIG.ORDERS_SHEET_NAME);
-  sheet.getRange(1, 1, 1, ORDER_HEADERS.length).setValues([ORDER_HEADERS]);
-  sheet.getRange(1, 1, 1, ORDER_HEADERS.length).setFontWeight('bold');
-  sheet.setFrozenRows(1);
-  sheet.autoResizeColumns(1, ORDER_HEADERS.length);
-  return `Ready: ${CONFIG.ORDERS_SHEET_NAME}`;
-}
-
-/**
- * Called from checkout.html. No password required — this is the public
- * "place an order" action, same as any storefront checkout button.
- * items is a JSON string: [{"id":"R001","size":"M","qty":1}, ...]
- */
-function placeOrder(p) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName(CONFIG.ORDERS_SHEET_NAME);
-  if (!sheet) { setupOrdersSheet(); sheet = ss.getSheetByName(CONFIG.ORDERS_SHEET_NAME); }
-
-  let items = [];
-  try { items = JSON.parse(p.items || '[]'); } catch (e) { items = []; }
-  if (!items.length) return { success: false, error: 'Your bag is empty.' };
-  if (!String(p.email || '').trim()) return { success: false, error: 'Email is required.' };
-
-  const orderNumber = generateNextOrderNumber_(sheet);
-  const row = [
-    orderNumber,
-    new Date(),
-    'Pending',
-    String(p.name || '').trim(),
-    String(p.email || '').trim(),
-    String(p.phone || '').trim(),
-    String(p.country || '').trim(),
-    String(p.city || '').trim(),
-    String(p.postal || '').trim(),
-    String(p.address || '').trim(),
-    String(p.payment || 'Cash on Delivery').trim(),
-    JSON.stringify(items),
-    Number(p.total || 0)
-  ];
-  sheet.getRange(sheet.getLastRow() + 1, 1, 1, ORDER_HEADERS.length).setValues([row]);
-
-  items.forEach(item => {
-    if (item && item.id) decrementStockEverywhere_(String(item.id), Number(item.qty || 1));
-  });
-
-  return { success: true, orderNumber };
-}
-
-function generateNextOrderNumber_(sheet) {
-  const values = sheet.getDataRange().getValues();
-  let max = 10000;
-  values.slice(1).forEach(row => {
-    const m = String(row[0] || '').match(/(\d+)/);
-    if (m) max = Math.max(max, Number(m[1]));
-  });
-  return 'ROG-' + (max + 1);
-}
-
-/**
- * Reduces Stock by qty for a product everywhere it's stored (Products +
- * every page tab it appears in), never going below 0.
- */
-function decrementStockEverywhere_(id, qty) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheetsToUpdate = [CONFIG.SHEET_NAME, ...Object.keys(CONFIG.PAGE_SHEETS)];
-  sheetsToUpdate.forEach(sheetName => {
-    const sheet = ss.getSheetByName(sheetName);
-    if (!sheet || sheet.getLastRow() < 2) return;
-    const values = sheet.getDataRange().getValues();
-    for (let i = 1; i < values.length; i++) {
-      if (String(values[i][0] || '').trim() === id) {
-        const stockCol = 9; // 'Stock' is column 9 (1-indexed) per PRODUCT_HEADERS
-        const current = Number(values[i][stockCol - 1] || 0);
-        const next = Math.max(0, current - qty);
-        sheet.getRange(i + 1, stockCol).setValue(next);
-      }
-    }
-  });
-}
-
-/**
- * Admin-only: list every order, most recent first.
- */
-function getOrders(p) {
-  if (!checkEditPassword_(p.password)) return { success: false, error: 'Invalid password' };
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(CONFIG.ORDERS_SHEET_NAME);
-  if (!sheet) return { success: true, orders: [] };
-
-  const values = sheet.getDataRange().getValues();
-  if (values.length < 2) return { success: true, orders: [] };
-
-  const orders = values.slice(1).map(row => {
-    let items = [];
-    try { items = JSON.parse(row[11] || '[]'); } catch (e) { items = []; }
-    return {
-      orderNumber: String(row[0] || ''),
-      date: row[1] instanceof Date ? row[1].toISOString() : String(row[1] || ''),
-      status: String(row[2] || 'Pending'),
-      name: String(row[3] || ''),
-      email: String(row[4] || ''),
-      phone: String(row[5] || ''),
-      country: String(row[6] || ''),
-      city: String(row[7] || ''),
-      postal: String(row[8] || ''),
-      address: String(row[9] || ''),
-      payment: String(row[10] || ''),
-      items,
-      total: Number(row[12] || 0)
-    };
-  }).reverse();
-
-  return { success: true, orders };
-}
-
-/**
- * Admin-only: update the status of one order (Pending / Processing / Shipped
- * / Delivered / Cancelled).
- */
-function updateOrderStatus(p) {
-  if (!checkEditPassword_(p.password)) return { success: false, error: 'Invalid password' };
-  const orderNumber = String(p.orderNumber || '').trim();
-  if (!orderNumber) return { success: false, error: 'Missing orderNumber' };
-
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(CONFIG.ORDERS_SHEET_NAME);
-  if (!sheet) return { success: false, error: 'Orders sheet not found' };
-
-  const values = sheet.getDataRange().getValues();
-  for (let i = 1; i < values.length; i++) {
-    if (String(values[i][0] || '').trim() === orderNumber) {
-      sheet.getRange(i + 1, 3).setValue(String(p.status || 'Pending'));
-      return { success: true };
-    }
-  }
-  return { success: false, error: 'Order not found' };
 }
 
 function getProducts(params) {
@@ -1029,6 +1051,19 @@ function setupCollectionPageImagesSheet() {
 function ensureTitleColumn(sheet) {
   const lastCol = Math.max(sheet.getLastColumn(), 1);
   const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h).trim());
+  const hasAnyHeader = headers.some(Boolean);
+
+  if (!hasAnyHeader) {
+    // Brand new / never-initialized sheet (e.g. saved to from admin-products.html
+    // before the one-time setup*() function was ever run). Write the full
+    // canonical header row from scratch instead of trying to "insert a Title
+    // column" next to headers that don't exist yet.
+    const fullHeaders = ['Key', 'Image', 'Alt', 'Title', 'Status'];
+    sheet.getRange(1, 1, 1, fullHeaders.length).setValues([fullHeaders]);
+    sheet.getRange(1, 1, 1, fullHeaders.length).setFontWeight('bold');
+    return;
+  }
+
   if (headers.indexOf('Title') === -1) {
     // Existing sheets originally had Key | Image | Alt | Status.
     // Insert Title before Status so existing Status values stay intact.

@@ -17,33 +17,6 @@ let ROUGE_PRODUCTS = ROUGE_FALLBACK_PRODUCTS.map(x => ({...x}));
 let ROUGE_PRODUCTS_READY = false;
 let ROUGE_PRODUCTS_ERROR = null;
 
-/**
- * General-purpose call to the ROUGE Apps Script API using a <script>-tag GET
- * request (JSONP), which avoids the CORS problems that plague cross-origin
- * fetch() POST requests to Apps Script Web Apps. Used for anything that reads
- * or writes data — e.g. rougeApiCall('placeOrder', {email, items, ...}).
- */
-function rougeApiCall(action, params = {}) {
-  return new Promise((resolve) => {
-    const cb = '__rougeApi_' + Date.now() + '_' + Math.random().toString(36).slice(2);
-    const script = document.createElement('script');
-    let settled = false;
-    const finish = (data) => {
-      if (settled) return;
-      settled = true;
-      try { delete window[cb]; } catch (e) { window[cb] = undefined; }
-      script.remove();
-      resolve(data);
-    };
-    const timeout = setTimeout(() => finish({ success:false, error:'Request timed out — check your internet connection' }), 25000);
-    window[cb] = (data) => { clearTimeout(timeout); finish(data); };
-    script.onerror = () => { clearTimeout(timeout); finish({ success:false, error:'Could not reach the ROUGE API' }); };
-    const qp = new URLSearchParams({ action, callback: cb, _: Date.now(), ...params });
-    script.src = `${ROUGE_API_URL}?${qp.toString()}`;
-    document.head.appendChild(script);
-  });
-}
-
 const money = n => `EGP ${Number(n || 0).toLocaleString('en-EG')}`;
 const cartKey='rougeCartV4', wishKey='rougeWishlistV4', ordersKey='rougeOrdersV4';
 
@@ -77,21 +50,6 @@ function imageCandidates(value){
       url
     ];
   }
-  return [url];
-}
-
-function getDriveId(value){
-  const url = String(value || '').trim();
-  if(!url) return '';
-  const patterns=[/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/,/drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/,/drive\.google\.com\/uc\?(?:[^#]*?&)?id=([a-zA-Z0-9_-]+)/,/drive\.google\.com\/thumbnail\?id=([a-zA-Z0-9_-]+)/];
-  for(const re of patterns){const m=url.match(re);if(m)return m[1];}
-  if(/^[a-zA-Z0-9_-]{20,}$/.test(url)) return url;
-  return '';
-}
-function imageCandidates(value){
-  const url=String(value||'').trim(); if(!url)return [];
-  const id=getDriveId(url);
-  if(id)return [`https://drive.google.com/thumbnail?id=${id}&sz=w1600`,`https://drive.google.com/uc?export=view&id=${id}`,url];
   return [url];
 }
 function normalizeImageUrl(value){return imageCandidates(value)[0]||'';}

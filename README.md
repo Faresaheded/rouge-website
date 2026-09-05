@@ -200,20 +200,23 @@ Nothing extra — it reuses the same Apps Script deployment and the same passwor
 Everything saves straight back to your existing **Products**, **Homepage Images**, and **Collection Page Images** sheets — you can still open the spreadsheet directly any time and it'll match exactly what the admin page shows.
 
 
-## V11 — Real orders (checkout is no longer a demo)
+## Orders — checkout & admin.html
 
-Checkout used to only save the "order" to the buyer's own browser — you'd never see it, no payment was collected, and stock never changed. That's fixed:
+`checkout.html` submits every order to the Apps Script backend, and `admin.html` (Order Management) reads and updates them from a dedicated **Orders** sheet.
 
-- Every checkout now creates a real row in a new **Orders** sheet (created automatically the first time an order comes in, or run `setupOrdersSheet()` once yourself).
-- Payment is **Cash on Delivery** — that's the only real option right now (see "still missing" below for online card payment).
-- Product **Stock** is automatically reduced when an order is placed.
-- The **Orders** section in `admin-products.html` shows every real order — customer, items, total — with a status dropdown (Pending / Processing / Shipped / Delivered / Cancelled) and Save button per row, plus 3 KPI cards (total orders, total sales, pending count).
-- The old `admin.html` still exists but now just links to the real one — it was only ever showing fake browser-local data.
+### One-time setup
 
-### Setup
-Nothing extra beyond replacing the script and redeploying as usual. The Orders sheet creates itself the first time it's needed.
+1. Make sure the Apps Script project's code matches the included `GoogleAppsScript.gs`.
+2. Optionally run `setupOrdersSheet()` once in Apps Script to create the sheet in advance — it isn't required, since the **Orders** sheet is also created automatically the first time a customer places an order.
+3. Make sure `setEditPassword('yourpassword')` has been run — `admin.html` uses the same shared edit password as the visual editor and the Product & Image Manager.
+4. Redeploy: **Deploy → Manage deployments → Edit → New version → Deploy**.
 
-### What's still not real (by design — these need your decisions/accounts, not just code)
-- **Online card payment.** No payment gateway is connected. If you want real card payments, you'll need a merchant account with something like Stripe, Paymob, or Fawry, and I can wire it in once you have one.
-- **Customer accounts.** `account.html` is still a local-only demo profile — there's no real login. Guest checkout (what you have now) is genuinely fine for launch; real accounts are a separate project (e.g. Supabase Auth) if you want them later.
-- **Hosting.** The site still only runs on your computer via Live Server. It needs to go on GitHub Pages, Netlify, or similar before anyone else can visit it.
+### Orders sheet columns
+
+| Order Number | Date | Email | Phone | Full Name | Country | City | Postal Code | Address | Payment | Items | Total | Status |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+
+- Order numbers are generated automatically (`RG-0001`, `RG-0002`, ...).
+- `Items` stores the order's line items as JSON (name, size, qty, price).
+- `Status` starts as `Pending` and can be changed from `admin.html` (Pending / Confirmed / Shipped / Cancelled).
+- The hidden `website` field on the checkout form is a spam honeypot — real customers never fill it in; submissions that do are silently ignored.
