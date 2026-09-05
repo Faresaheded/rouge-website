@@ -156,11 +156,25 @@ async function authed(action, fields){
 }
 
 /* ---------- login ---------- */
-document.getElementById('pwSubmit').onclick = () => {
-  PASSWORD = document.getElementById('pwInput').value.trim();
+document.getElementById('pwSubmit').onclick = async () => {
+  const candidate = document.getElementById('pwInput').value.trim();
+  const submitBtn = document.getElementById('pwSubmit');
+  submitBtn.disabled = true;
+  PASSWORD = candidate;
+  const data = await authed('getOrders'); // validates the password against the server before unlocking anything
+  submitBtn.disabled = false;
+  if (!data.success) {
+    if (data.error !== 'Invalid password') toast('Error: ' + (data.error||'could not verify password'), true);
+    document.getElementById('pwInput').value = '';
+    document.getElementById('pwInput').focus();
+    return; // login gate stays visible — nothing is shown until the password checks out
+  }
   sessionStorage.setItem('rougeAdminPassword', PASSWORD);
   document.getElementById('loginGate').style.display='none';
-  loadEverything();
+  ORDERS = data.orders || [];
+  renderKpis();
+  renderOrders();
+  loadStockKpi();
 };
 document.getElementById('pwInput').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('pwSubmit').click(); });
 if (PASSWORD) { document.getElementById('loginGate').style.display='none'; loadEverything(); }
