@@ -198,3 +198,25 @@ Nothing extra — it reuses the same Apps Script deployment and the same passwor
 4. **Homepage Collection Cards** and **Collections Page Cards** sections: each has 3 cards (Dresses / Clothing / Accessories) with an image field (paste a Drive link or URL), title, alt text, and status — same data these two sheets already held, just with a live preview and a Save button instead of editing sheet cells.
 
 Everything saves straight back to your existing **Products**, **Homepage Images**, and **Collection Page Images** sheets — you can still open the spreadsheet directly any time and it'll match exactly what the admin page shows.
+
+
+## Orders — checkout & admin.html
+
+`checkout.html` submits every order to the Apps Script backend, and `admin.html` (Order Management) reads and updates them from a dedicated **Orders** sheet.
+
+### One-time setup
+
+1. Make sure the Apps Script project's code matches the included `GoogleAppsScript.gs`.
+2. Optionally run `setupOrdersSheet()` once in Apps Script to create the sheet in advance — it isn't required, since the **Orders** sheet is also created automatically the first time a customer places an order.
+3. Make sure `setEditPassword('yourpassword')` has been run — `admin.html` uses the same shared edit password as the visual editor and the Product & Image Manager.
+4. Redeploy: **Deploy → Manage deployments → Edit → New version → Deploy**.
+
+### Orders sheet columns
+
+| Order Number | Date | Email | Phone | Full Name | Country | City | Postal Code | Address | Payment | Items | Total | Status |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+
+- Order numbers are generated automatically (`RG-0001`, `RG-0002`, ...).
+- `Items` stores the order's line items as JSON (name, size, qty, price).
+- `Status` starts as `Pending` and can be changed from `admin.html` (Pending / Confirmed / Shipped / Cancelled).
+- The hidden `website` field on the checkout form is a spam honeypot — real customers never fill it in; submissions that do are silently ignored.

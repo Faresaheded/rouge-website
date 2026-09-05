@@ -52,21 +52,6 @@ function imageCandidates(value){
   }
   return [url];
 }
-
-function getDriveId(value){
-  const url = String(value || '').trim();
-  if(!url) return '';
-  const patterns=[/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/,/drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/,/drive\.google\.com\/uc\?(?:[^#]*?&)?id=([a-zA-Z0-9_-]+)/,/drive\.google\.com\/thumbnail\?id=([a-zA-Z0-9_-]+)/];
-  for(const re of patterns){const m=url.match(re);if(m)return m[1];}
-  if(/^[a-zA-Z0-9_-]{20,}$/.test(url)) return url;
-  return '';
-}
-function imageCandidates(value){
-  const url=String(value||'').trim(); if(!url)return [];
-  const id=getDriveId(url);
-  if(id)return [`https://drive.google.com/thumbnail?id=${id}&sz=w1600`,`https://drive.google.com/uc?export=view&id=${id}`,url];
-  return [url];
-}
 function normalizeImageUrl(value){return imageCandidates(value)[0]||'';}
 function imageFallbackAttrs(value){const c=imageCandidates(value).slice(1);return c.length?` data-image-fallbacks="${encodeURIComponent(JSON.stringify(c))}"`:'';}
 function handleImageFallback(img){try{const list=JSON.parse(decodeURIComponent(img.dataset.imageFallbacks||'[]'));const next=list.shift();if(next){img.dataset.imageFallbacks=encodeURIComponent(JSON.stringify(list));img.src=next;}else img.classList.add('image-unavailable');}catch(e){img.classList.add('image-unavailable');}}
