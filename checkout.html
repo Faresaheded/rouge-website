@@ -1,72 +1,27 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta name="description" content="ROUGE — Luxury women's fashion atelier."><title>Checkout — ROUGE</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Manrope:wght@300;400;500;600&display=swap" rel="stylesheet"><link rel="stylesheet" href="rouge-v4.css"></head><body><div class="cursor-glow"></div><div id="pageLoader"><span class="loader-word">ROUGE</span></div><header class="site-nav" id="siteNav"><a class="brand" href="index.html">ROUGE</a><nav class="desktop-nav"><a href="new-in.html">NEW IN</a><a href="collections.html">COLLECTIONS</a><a href="dresses.html">DRESSES</a><a href="clothing.html">CLOTHING</a><a href="accessories.html">ACCESSORIES</a><a href="about.html">ABOUT</a></nav><div class="nav-actions"><button class="icon-btn" id="searchButton">⌕</button><a class="icon-btn" href="account.html" aria-label="Account">♙</a><a class="icon-btn" href="wishlist.html" aria-label="Wishlist">♡</a><button class="bag-btn" id="bagButton">BAG <span data-bag-count>0</span></button><button class="menu-btn" id="menuButton">☰</button></div></header><nav class="mobile-nav" id="mobileNav"><a href="new-in.html">NEW IN</a><a href="collections.html">COLLECTIONS</a><a href="dresses.html">DRESSES</a><a href="clothing.html">CLOTHING</a><a href="accessories.html">ACCESSORIES</a><a href="about.html">ABOUT</a><a href="account.html">ACCOUNT</a><a href="wishlist.html">WISHLIST</a></nav><main><section class="form-page"><span class="kicker">ROUGE / CHECKOUT</span><h1>Checkout</h1><div id="emptyCheckout" style="display:none"><p>Your bag is empty.</p><a class="ghost-link" href="collections.html">RETURN TO COLLECTIONS →</a></div><div class="form-layout" id="checkoutLayout"><form id="checkoutForm"><input id="website" type="text" name="website" autocomplete="off" tabindex="-1" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0" aria-hidden="true"><div class="field-grid"><div class="field"><label>EMAIL</label><input id="email" type="email" required></div><div class="field"><label>PHONE</label><input id="phone" required></div><div class="field"><label>FULL NAME</label><input id="fullName" required></div><div class="field"><label>COUNTRY</label><select id="country"><option>Egypt</option><option>United Arab Emirates</option><option>Saudi Arabia</option><option>United Kingdom</option><option>United States</option></select></div><div class="field"><label>CITY</label><input id="city" required></div><div class="field"><label>POSTAL CODE</label><input id="postalCode"></div><div class="field full"><label>ADDRESS</label><textarea id="address" rows="3" required></textarea></div><div class="field full"><label>PAYMENT</label><select id="payment"><option>Cash on Delivery</option><option>Card — contact us to arrange</option></select></div></div><button class="primary-btn" type="submit">PLACE ORDER →</button><p id="checkoutError" style="display:none;color:#a02020;font-size:.8rem;margin-top:10px"></p></form><aside class="summary-box"><span class="eyebrow">YOUR ORDER</span><div id="checkoutItems"></div><div class="summary-row summary-total"><strong>TOTAL</strong><strong id="checkoutTotal">EGP 0</strong></div></aside></div><div class="success" id="orderSuccess"><h2>Order received.</h2><p>Your order number is <strong id="orderNumber"></strong>. We'll be in touch to confirm delivery.</p><a class="ghost-link" href="account.html">VIEW MY ORDERS →</a></div></section></main><footer><div class="footer-brand">ROUGE</div><div><span>CLIENT SERVICES</span><a href="shipping.html">Shipping</a><a href="returns.html">Returns</a><a href="size-guide.html">Size Guide</a><a href="contact.html">Contact</a><a href="faq.html">FAQ</a></div><div><span>THE HOUSE</span><a href="about.html">About ROUGE</a><a href="journal.html">Journal</a><a href="collections.html">Collections</a></div><div><span>LEGAL</span><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="cookies.html">Cookies</a></div><p class="copyright">© 2026 ROUGE ATELIER. ALL RIGHTS RESERVED.</p></footer><div class="bag-drawer" id="bagDrawer"><div class="bag-head"><h2>Your Bag</h2><button id="bagClose">×</button></div><div class="bag-items" id="bagItems"></div><div class="bag-total"><span>TOTAL</span><strong id="bagTotal">EGP 0</strong></div><a class="checkout" href="checkout.html" style="display:block;text-align:center">CHECKOUT →</a></div><div class="bag-backdrop" id="bagBackdrop"></div><div class="search-panel" id="searchPanel"><button id="searchClose">×</button><p>SEARCH ROUGE</p><input id="siteSearch" type="search" placeholder="Search dresses, collections..." autocomplete="off"><div class="search-results" id="searchResults"></div></div><script src="rouge-data.js?v=20260819-v47"></script><script src="rouge-content.js?v=20260823a"></script><script src="rouge-edit.js?v=20260823a"></script><script>onRougeReady(()=>{
-const c=getCart();
-if(!c.length){document.querySelector('#checkoutLayout').style.display='none';document.querySelector('#emptyCheckout').style.display='block';return}
-const box=document.querySelector('#checkoutItems');
-box.innerHTML=c.map(x=>{const p=ROUGE_PRODUCTS.find(p=>p.id===x.id);return `<div class="summary-row"><span>${p.name} × ${x.qty}<small style="display:block;color:#766b68">SIZE ${x.size}</small></span><span>${money(p.price*x.qty)}</span></div>`}).join('');
-const total=c.reduce((s,x)=>s+ROUGE_PRODUCTS.find(p=>p.id===x.id).price*x.qty,0);
-document.querySelector('#checkoutTotal').textContent=money(total);
-
-function submitOrderToServer(payload){
-  return new Promise((resolve)=>{
-    const cb='__rougeOrder_'+Date.now()+'_'+Math.random().toString(36).slice(2);
-    const script=document.createElement('script');
-    let settled=false;
-    const finish=(data)=>{
-      if(settled)return;
-      settled=true;
-      try{delete window[cb]}catch(e){window[cb]=undefined}
-      script.remove();
-      resolve(data);
-    };
-    const timeout=setTimeout(()=>finish({success:false,error:'Request timed out. Please check your connection and try again.'}),25000);
-    window[cb]=(data)=>{clearTimeout(timeout);finish(data)};
-    script.onerror=()=>{clearTimeout(timeout);finish({success:false,error:'Could not reach the ROUGE order system.'})};
-    const params=new URLSearchParams({action:'createOrder',callback:cb,_:Date.now(),...payload});
-    script.src=`${ROUGE_API_URL}?${params.toString()}`;
-    document.head.appendChild(script);
-  });
-}
-
-document.querySelector('#checkoutForm').onsubmit=async e=>{
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta name="description" content="ROUGE — Luxury women's fashion atelier."><title>Checkout — ROUGE</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Manrope:wght@300;400;500;600&display=swap" rel="stylesheet"><link rel="stylesheet" href="rouge-v4.css"></head><body><div class="cursor-glow"></div><div id="pageLoader"><span class="loader-word">ROUGE</span></div><header class="site-nav" id="siteNav"><a class="brand" href="index.html">ROUGE</a><nav class="desktop-nav"><a href="new-in.html">NEW IN</a><a href="collections.html">COLLECTIONS</a><a href="dresses.html">DRESSES</a><a href="clothing.html">CLOTHING</a><a href="accessories.html">ACCESSORIES</a><a href="about.html">ABOUT</a></nav><div class="nav-actions"><button class="icon-btn" id="searchButton">⌕</button><a class="icon-btn" href="account.html" aria-label="Account">♙</a><a class="icon-btn" href="wishlist.html" aria-label="Wishlist">♡</a><button class="bag-btn" id="bagButton">BAG <span data-bag-count>0</span></button><button class="menu-btn" id="menuButton">☰</button></div></header><nav class="mobile-nav" id="mobileNav"><a href="new-in.html">NEW IN</a><a href="collections.html">COLLECTIONS</a><a href="dresses.html">DRESSES</a><a href="clothing.html">CLOTHING</a><a href="accessories.html">ACCESSORIES</a><a href="about.html">ABOUT</a><a href="account.html">ACCOUNT</a><a href="wishlist.html">WISHLIST</a></nav><main><section class="form-page"><span class="kicker">ROUGE / CHECKOUT</span><h1>Checkout</h1><div id="emptyCheckout" style="display:none"><p>Your bag is empty.</p><a class="ghost-link" href="collections.html">RETURN TO COLLECTIONS →</a></div><div class="form-layout" id="checkoutLayout"><form id="checkoutForm"><div class="field-grid"><div class="field"><label>EMAIL</label><input id="email" type="email" required></div><div class="field"><label>PHONE</label><input id="phone" required></div><div class="field"><label>FULL NAME</label><input id="fullName" required></div><div class="field"><label>COUNTRY</label><select id="country"><option>Egypt</option><option>United Arab Emirates</option><option>Saudi Arabia</option><option>United Kingdom</option><option>United States</option></select></div><div class="field"><label>CITY</label><input id="city" required></div><div class="field"><label>POSTAL CODE</label><input id="postal"></div><div class="field full"><label>ADDRESS</label><textarea id="address" rows="3" required></textarea></div><div class="field full"><label>PAYMENT</label><select id="paymentMethod"><option>Cash on Delivery</option></select><p style="color:#9f9491;font-size:.68rem;margin-top:6px">Online card payment isn't connected yet — Cash on Delivery is the only live option right now.</p></div></div><div id="checkoutError" style="display:none;color:#c0392b;font-size:.78rem;margin-top:10px"></div><button class="primary-btn" type="submit" id="placeOrderBtn">PLACE ORDER →</button></form><aside class="summary-box"><span class="eyebrow">YOUR ORDER</span><div id="checkoutItems"></div><div class="summary-row summary-total"><strong>TOTAL</strong><strong id="checkoutTotal">EGP 0</strong></div></aside></div><div class="success" id="orderSuccess"><h2>Order received.</h2><p>Your order number is <strong id="orderNumber"></strong>. We'll contact you to confirm details before dispatch — payment is Cash on Delivery.</p><a class="ghost-link" href="account.html">VIEW MY ORDERS →</a></div></section></main><footer><div class="footer-brand">ROUGE</div><div><span>CLIENT SERVICES</span><a href="shipping.html">Shipping</a><a href="returns.html">Returns</a><a href="size-guide.html">Size Guide</a><a href="contact.html">Contact</a><a href="faq.html">FAQ</a></div><div><span>THE HOUSE</span><a href="about.html">About ROUGE</a><a href="journal.html">Journal</a><a href="collections.html">Collections</a></div><div><span>LEGAL</span><a href="privacy.html">Privacy</a><a href="terms.html">Terms</a><a href="cookies.html">Cookies</a></div><p class="copyright">© 2026 ROUGE ATELIER. ALL RIGHTS RESERVED.</p></footer><div class="bag-drawer" id="bagDrawer"><div class="bag-head"><h2>Your Bag</h2><button id="bagClose">×</button></div><div class="bag-items" id="bagItems"></div><div class="bag-total"><span>TOTAL</span><strong id="bagTotal">EGP 0</strong></div><a class="checkout" href="checkout.html" style="display:block;text-align:center">CHECKOUT →</a></div><div class="bag-backdrop" id="bagBackdrop"></div><div class="search-panel" id="searchPanel"><button id="searchClose">×</button><p>SEARCH ROUGE</p><input id="siteSearch" type="search" placeholder="Search dresses, collections..." autocomplete="off"><div class="search-results" id="searchResults"></div></div><script src="rouge-data.js?v=20260819-v47"></script><script src="rouge-content.js?v=20260823a"></script><script src="rouge-edit.js?v=20260823a"></script><script>onRougeReady(()=>{const c=getCart();if(!c.length){document.querySelector('#checkoutLayout').style.display='none';document.querySelector('#emptyCheckout').style.display='block';return}const box=document.querySelector('#checkoutItems');box.innerHTML=c.map(x=>{const p=ROUGE_PRODUCTS.find(p=>p.id===x.id);return `<div class="summary-row"><span>${p.name} × ${x.qty}<small style="display:block;color:#766b68">SIZE ${x.size}</small></span><span>${money(p.price*x.qty)}</span></div>`}).join('');const total=c.reduce((s,x)=>s+ROUGE_PRODUCTS.find(p=>p.id===x.id).price*x.qty,0);document.querySelector('#checkoutTotal').textContent=money(total);document.querySelector('#checkoutForm').onsubmit=async e=>{
   e.preventDefault();
+  const btn=document.querySelector('#placeOrderBtn');
   const errBox=document.querySelector('#checkoutError');
   errBox.style.display='none';
-  const submitBtn=document.querySelector('#checkoutForm .primary-btn');
-  submitBtn.disabled=true;
-  submitBtn.textContent='PLACING ORDER…';
-
-  const items=c.map(x=>{const p=ROUGE_PRODUCTS.find(p=>p.id===x.id);return{id:p.externalId,name:p.name,size:x.size,qty:x.qty,price:p.price}});
-  const payload={
-    website:document.querySelector('#website').value.trim(),
+  const items=c.map(x=>({id:x.id,size:x.size,qty:x.qty}));
+  btn.disabled=true;btn.textContent='PLACING ORDER…';
+  const data=await rougeApiCall('placeOrder',{
     email:document.querySelector('#email').value.trim(),
     phone:document.querySelector('#phone').value.trim(),
-    fullName:document.querySelector('#fullName').value.trim(),
+    name:document.querySelector('#fullName').value.trim(),
     country:document.querySelector('#country').value,
     city:document.querySelector('#city').value.trim(),
-    postalCode:document.querySelector('#postalCode').value.trim(),
+    postal:document.querySelector('#postal').value.trim(),
     address:document.querySelector('#address').value.trim(),
-    payment:document.querySelector('#payment').value,
+    payment:document.querySelector('#paymentMethod').value,
     items:JSON.stringify(items),
     total
-  };
-
-  const result=await submitOrderToServer(payload);
-
-  if(!result.success){
-    submitBtn.disabled=false;
-    submitBtn.textContent='PLACE ORDER →';
-    errBox.textContent='Order not placed — '+(result.error||'please try again.');
-    errBox.style.display='block';
-    return;
-  }
-
-  const orders=JSON.parse(localStorage.getItem(ordersKey)||'[]');
-  orders.unshift({number:result.orderNumber,date:result.date,items:c,total,status:'Pending'});
-  localStorage.setItem(ordersKey,JSON.stringify(orders));
+  });
+  btn.disabled=false;btn.textContent='PLACE ORDER →';
+  if(!data.success){errBox.textContent='Error: '+(data.error||'could not place order — please try again');errBox.style.display='block';return}
   localStorage.removeItem(cartKey);
   document.querySelector('#checkoutLayout').style.display='none';
   document.querySelector('#orderSuccess').classList.add('show');
-  document.querySelector('#orderNumber').textContent=result.orderNumber;
-  updateBagCount();
-};
-});</script><script>onRougeReady(()=>{const i=document.querySelector('#siteSearch'),r=document.querySelector('#searchResults');if(i&&r)i.addEventListener('input',()=>{const q=i.value.toLowerCase().trim();r.innerHTML=q?ROUGE_PRODUCTS.filter(p=>(p.name+' '+p.category+' '+p.tag+' '+p.color).toLowerCase().includes(q)).map(p=>`<a href="product.html?id=${p.id}">${p.name} — ${money(p.price)}</a>`).join(''):'<span style="color:#766b68;font-size:.7rem;letter-spacing:.1em">SEARCH THE ROUGE EDIT</span>'});});</script></body></html>
+  document.querySelector('#orderNumber').textContent=data.orderNumber;
+  updateBagCount()
+}});</script><script>onRougeReady(()=>{const i=document.querySelector('#siteSearch'),r=document.querySelector('#searchResults');if(i&&r)i.addEventListener('input',()=>{const q=i.value.toLowerCase().trim();r.innerHTML=q?ROUGE_PRODUCTS.filter(p=>(p.name+' '+p.category+' '+p.tag+' '+p.color).toLowerCase().includes(q)).map(p=>`<a href="product.html?id=${p.id}">${p.name} — ${money(p.price)}</a>`).join(''):'<span style="color:#766b68;font-size:.7rem;letter-spacing:.1em">SEARCH THE ROUGE EDIT</span>'});});</script></body></html>

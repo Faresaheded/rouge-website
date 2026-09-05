@@ -37,6 +37,10 @@
   .icon-card label{display:block;font-size:.65rem;letter-spacing:.08em;color:var(--muted);margin:8px 0 4px}
   .icon-card input,.icon-card select{width:100%;background:#0c0c0c;border:1px solid var(--line);color:var(--text);padding:8px;border-radius:4px;font:inherit}
   .icon-card .btn{width:100%;margin-top:12px}
+  .kpi-card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:18px;text-align:center}
+  .kpi-card .kpi-value{font-family:'Cormorant Garamond',serif;font-size:2rem;color:var(--red);display:block}
+  .kpi-card .kpi-label{font-size:.65rem;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+  select.status-select{background:#0c0c0c;border:1px solid var(--line);color:var(--text);padding:6px 8px;border-radius:4px;font:inherit}
 
   #loginGate{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:999}
   #loginGate input{padding:12px 14px;border-radius:4px;border:1px solid var(--line);background:#161616;color:var(--text);font:inherit;width:260px}
@@ -81,6 +85,20 @@
     <table>
       <thead><tr><th></th><th>Title</th><th>Category</th><th>Price</th><th>Stock</th><th>Status</th><th></th></tr></thead>
       <tbody id="productRows"><tr><td colspan="7" class="empty">Loading products…</td></tr></tbody>
+    </table>
+  </section>
+
+  <section>
+    <div class="toolbar">
+      <div>
+        <h2>Orders</h2>
+        <p class="hint">Every real order placed at checkout lands here. Update status as you process each one.</p>
+      </div>
+    </div>
+    <div class="icon-grid" id="orderKpis" style="grid-template-columns:repeat(3,1fr);margin-bottom:22px"></div>
+    <table>
+      <thead><tr><th>Order</th><th>Date</th><th>Customer</th><th>Items</th><th>Total</th><th>Status</th><th></th></tr></thead>
+      <tbody id="orderRows"><tr><td colspan="7" class="empty">Loading orders…</td></tr></tbody>
     </table>
   </section>
 
@@ -305,6 +323,62 @@ document.getElementById('saveProductBtn').onclick = async () => {
   }
 };
 
+/* ---------- orders ---------- */
+let ORDERS = [];
+const ORDER_STATUSES = ['Pending','Processing','Shipped','Delivered','Cancelled'];
+
+async function loadOrders(){
+  const tbody = document.getElementById('orderRows');
+  tbody.innerHTML = '<tr><td colspan="7" class="empty">Loading orders…</td></tr>';
+  const data = await post('orders', {});
+  if (!data.success){ tbody.innerHTML = `<tr><td colspan="7" class="empty">Error: ${escapeHtml(data.error||'could not load orders')}</td></tr>`; return; }
+  ORDERS = data.orders || [];
+  renderOrderKpis();
+  renderOrders();
+}
+
+function renderOrderKpis(){
+  const totalSales = ORDERS.reduce((s,o)=>s+Number(o.total||0),0);
+  const pending = ORDERS.filter(o=>o.status==='Pending').length;
+  document.getElementById('orderKpis').innerHTML = `
+    <div class="kpi-card"><span class="kpi-value">${ORDERS.length}</span><span class="kpi-label">Total Orders</span></div>
+    <div class="kpi-card"><span class="kpi-value">EGP ${totalSales.toLocaleString()}</span><span class="kpi-label">Total Sales</span></div>
+    <div class="kpi-card"><span class="kpi-value">${pending}</span><span class="kpi-label">Pending</span></div>`;
+}
+
+function renderOrders(){
+  const tbody = document.getElementById('orderRows');
+  if (!ORDERS.length){ tbody.innerHTML='<tr><td colspan="7" class="empty">No orders yet.</td></tr>'; return; }
+  tbody.innerHTML = ORDERS.map(o => {
+    const itemsSummary = (o.items||[]).map(i=>`${escapeHtml(i.id)} × ${i.qty}${i.size?` (${escapeHtml(i.size)})`:''}`).join('<br>');
+    const dateStr = o.date ? new Date(o.date).toLocaleString() : '';
+    return `
+    <tr>
+      <td>${escapeHtml(o.orderNumber)}</td>
+      <td>${escapeHtml(dateStr)}</td>
+      <td>${escapeHtml(o.name)}<br><span style="color:var(--muted);font-size:.72rem">${escapeHtml(o.email)}</span></td>
+      <td style="font-size:.75rem">${itemsSummary}</td>
+      <td>EGP ${Number(o.total||0).toLocaleString()}</td>
+      <td>
+        <select class="status-select" data-order="${escapeHtml(o.orderNumber)}">
+          ${ORDER_STATUSES.map(s=>`<option ${s===o.status?'selected':''}>${s}</option>`).join('')}
+        </select>
+      </td>
+      <td><button class="btn ghost" onclick="saveOrderStatus('${o.orderNumber}', this)">SAVE</button></td>
+    </tr>`;
+  }).join('');
+}
+
+window.saveOrderStatus = async function(orderNumber, btnEl){
+  const select = document.querySelector(`.status-select[data-order="${CSS.escape(orderNumber)}"]`);
+  const status = select.value;
+  btnEl.disabled = true;
+  const data = await post('updateOrderStatus', { orderNumber, status });
+  btnEl.disabled = false;
+  if (data.success){ toast('Order updated ✓'); const o=ORDERS.find(x=>x.orderNumber===orderNumber); if(o) o.status=status; renderOrderKpis(); }
+  else toast('Error: ' + (data.error||'could not update'), true);
+};
+
 /* ---------- homepage / collection image cards ---------- */
 const IMAGE_KEYS = [
   { key: 'dresses', label: 'Dresses' },
@@ -364,6 +438,7 @@ async function loadImageSet(action, containerId, saveAction){
 
 function loadEverything(){
   loadProducts();
+  loadOrders();
   loadImageSet('homepageImages', 'homepageImages', 'saveHomepageImage');
   loadImageSet('collectionImages', 'collectionImages', 'saveCollectionImage');
 }
