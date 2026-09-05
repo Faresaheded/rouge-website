@@ -34,6 +34,8 @@ function doGet(e) {
     else if (action === 'createOrder') result = createOrder((e && e.parameter) || {});
     else if (action === 'getOrders') result = getOrders((e && e.parameter) || {});
     else if (action === 'updateOrderStatus') result = updateOrderStatus((e && e.parameter) || {});
+    else if (action === 'submitContact') result = submitContact((e && e.parameter) || {});
+    else if (action === 'subscribeNewsletter') result = subscribeNewsletter((e && e.parameter) || {});
     else result = { success: false, error: 'Unknown action' };
 
     return jsonResponse(result, callback);
@@ -59,6 +61,8 @@ function doPost(e) {
     if (body.action === 'createOrder') return jsonResponse(createOrder(body));
     if (body.action === 'getOrders') return jsonResponse(getOrders(body));
     if (body.action === 'updateOrderStatus') return jsonResponse(updateOrderStatus(body));
+    if (body.action === 'submitContact') return jsonResponse(submitContact(body));
+    if (body.action === 'subscribeNewsletter') return jsonResponse(subscribeNewsletter(body));
     return jsonResponse({ success: false, error: 'Unknown action' });
   } catch (error) {
     return jsonResponse({ success: false, error: String(error && error.message || error) });
@@ -338,7 +342,8 @@ function generateNextProductId_(sheet) {
 
 const ORDER_HEADERS = [
   'Order Number', 'Date', 'Email', 'Phone', 'Full Name', 'Country', 'City',
-  'Postal Code', 'Address', 'Payment', 'Items', 'Total', 'Status'
+  'Postal Code', 'Address', 'Payment', 'Items', 'Subtotal', 'Shipping', 'Total',
+  'Status', 'Order Token', 'Tracking Number', 'Tracking URL'
 ];
 
 /**
@@ -349,24 +354,46 @@ function setupOrdersSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName(CONFIG.ORDERS_SHEET_NAME);
   if (!sheet) sheet = ss.insertSheet(CONFIG.ORDERS_SHEET_NAME);
+  ensureOrdersSheetLayout_(sheet);
+  return `Ready: ${CONFIG.ORDERS_SHEET_NAME}`;
+}
+
+function ensureOrdersSheetLayout_(sheet) {
+  const existingLastCol = Math.max(sheet.getLastColumn(), 1);
+  const existingHeaders = sheet.getRange(1, 1, 1, existingLastCol).getValues()[0].map(h => String(h).trim());
+  if (existingHeaders.every(h => !h)) {
+    sheet.getRange(1, 1, 1, ORDER_HEADERS.length).setValues([ORDER_HEADERS]);
+  } else {
+    // Preserve existing data and add any new operational columns by name.
+    ORDER_HEADERS.forEach((header, i) => {
+      if (existingHeaders.indexOf(header) === -1) {
+        sheet.getRange(1, sheet.getLastColumn() + 1).setValue(header);
+      }
+    });
+    const finalHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => String(h).trim());
+    // Keep the canonical columns first; move legacy columns only when necessary.
+    ORDER_HEADERS.forEach((header, targetIndex) => {
+      const currentIndex = finalHeaders.indexOf(header);
+      if (currentIndex === -1) return;
+      if (currentIndex !== targetIndex) {
+        sheet.moveColumns(sheet.getRange(1, currentIndex + 1, sheet.getMaxRows(), 1), targetIndex + 1);
+        finalHeaders.splice(currentIndex, 1);
+        finalHeaders.splice(targetIndex, 0, header);
+      }
+    });
+  }
   sheet.getRange(1, 1, 1, ORDER_HEADERS.length).setValues([ORDER_HEADERS]);
   sheet.getRange(1, 1, 1, ORDER_HEADERS.length).setFontWeight('bold');
   sheet.setFrozenRows(1);
-  sheet.autoResizeColumns(1, ORDER_HEADERS.length);
   sheet.setColumnWidth(9, 260);
   sheet.setColumnWidth(11, 320);
-  return `Ready: ${CONFIG.ORDERS_SHEET_NAME}`;
 }
 
 function getOrdersSheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName(CONFIG.ORDERS_SHEET_NAME);
-  if (!sheet) {
-    sheet = ss.insertSheet(CONFIG.ORDERS_SHEET_NAME);
-    sheet.getRange(1, 1, 1, ORDER_HEADERS.length).setValues([ORDER_HEADERS]);
-    sheet.getRange(1, 1, 1, ORDER_HEADERS.length).setFontWeight('bold');
-    sheet.setFrozenRows(1);
-  }
+  if (!sheet) sheet = ss.insertSheet(CONFIG.ORDERS_SHEET_NAME);
+  ensureOrdersSheetLayout_(sheet);
   return sheet;
 }
 
@@ -380,54 +407,156 @@ function generateNextOrderNumber_(sheet) {
   return 'RG-' + String(max + 1).padStart(4, '0');
 }
 
+function getMasterProductsForOrder_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(CONFIG.SHEET_NAME);
+  if (!sheet) throw new Error(`Sheet "${CONFIG.SHEET_NAME}" was not found.`);
+  ensureProductsTitleColumn(sheet);
+  const values = sheet.getDataRange().getValues();
+  const headers = values[0].map(h => String(h).trim());
+  const idx = {};
+  PRODUCT_HEADERS.forEach(h => idx[h] = headers.indexOf(h));
+  const map = {};
+  values.slice(1).forEach(row => {
+    const id = String(row[idx.ID] || '').trim();
+    if (!id) return;
+    const status = String(row[idx.Status] || 'Active').trim().toLowerCase();
+    map[id.toLowerCase()] = {
+      id,
+      externalId: id,
+      name: String(row[idx.Name] || row[idx.Title] || '').trim(),
+      price: Number(row[idx.Price] || 0),
+      stock: Number(row[idx.Stock] || 0),
+      sizes: String(row[idx.Sizes] || '').split(',').map(x => x.trim()).filter(Boolean),
+      status
+    };
+  });
+  return { sheet, idx, map };
+}
+
+function sendCustomerEmail_(to, subject, htmlBody) {
+  if (!to) return false;
+  try {
+    MailApp.sendEmail({to: String(to).trim(), subject, htmlBody, body: htmlBody.replace(/<[^>]+>/g, ' ')});
+    return true;
+  } catch (e) {
+    console.warn('Customer email failed: ' + e);
+    return false;
+  }
+}
+
+function notifyOrderCreated_(order) {
+  const lines = (order.items || []).map(it => `${it.name} × ${it.qty} — EGP ${Number(it.price * it.qty).toLocaleString()}`).join('<br>');
+  const body = `<div style="font-family:Arial,sans-serif;line-height:1.7"><h2>ROUGE — Order ${order.orderNumber}</h2><p>Thank you, ${escapeEmailHtml_(order.fullName)}. Your order has been received and is pending confirmation.</p><p>${lines}</p><p><strong>Total: EGP ${Number(order.total).toLocaleString()}</strong></p><p>We will contact you to confirm delivery.</p></div>`;
+  return sendCustomerEmail_(order.email, `ROUGE Order ${order.orderNumber} — Received`, body);
+}
+
+function notifyOrderStatus_(order, status) {
+  const copy = {
+    Confirmed: 'Your ROUGE order has been confirmed and is being prepared.',
+    Shipped: 'Your ROUGE order has shipped.',
+    Cancelled: 'Your ROUGE order has been cancelled. Please contact Client Services if you need assistance.'
+  }[status];
+  if (!copy) return false;
+  let tracking = '';
+  if (status === 'Shipped' && (order.trackingNumber || order.trackingUrl)) {
+    tracking = `<p>Tracking: ${escapeEmailHtml_(order.trackingNumber || '')}${order.trackingUrl ? ` — <a href="${escapeAttribute_(order.trackingUrl)}">Track shipment</a>` : ''}</p>`;
+  }
+  const body = `<div style="font-family:Arial,sans-serif;line-height:1.7"><h2>ROUGE — Order ${order.orderNumber}</h2><p>${copy}</p>${tracking}<p>Thank you for choosing ROUGE.</p></div>`;
+  return sendCustomerEmail_(order.email, `ROUGE Order ${order.orderNumber} — ${status}`, body);
+}
+
+function escapeEmailHtml_(v) { return String(v || '').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+function escapeAttribute_(v) { return String(v || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function setAdminEmail(email) {
+  PropertiesService.getScriptProperties().setProperty('ADMIN_EMAIL', String(email || '').trim());
+  return 'Admin notification email saved.';
+}
+
+function getAdminEmail_() {
+  return String(PropertiesService.getScriptProperties().getProperty('ADMIN_EMAIL') || Session.getEffectiveUser().getEmail() || '').trim();
+}
+
+function notifyAdminNewOrder_(order) {
+  const to = getAdminEmail_();
+  if (!to) return false;
+  const lines = (order.items || []).map(it => `${it.name} × ${it.qty} / ${it.size}`).join('<br>');
+  return sendCustomerEmail_(to, `ROUGE New Order ${order.orderNumber}`, `<div style="font-family:Arial,sans-serif;line-height:1.7"><h2>New ROUGE order</h2><p><strong>${escapeEmailHtml_(order.orderNumber)}</strong> — ${escapeEmailHtml_(order.fullName)}</p><p>${escapeEmailHtml_(order.email)} / ${escapeEmailHtml_(order.phone)}</p><p>${escapeEmailHtml_(order.address)}, ${escapeEmailHtml_(order.city)}, ${escapeEmailHtml_(order.country)}</p><p>${lines}</p><p><strong>Total: EGP ${Number(order.total).toLocaleString()}</strong></p></div>`);
+}
+
 /**
- * Creates a new order from the checkout page. No password is required here
- * (customers placing an order are not authenticated), but a hidden honeypot
- * field ("website") is used to silently drop spam-bot submissions.
+ * Creates an order using server-side product prices and inventory. The browser
+ * sends product IDs + quantities only; totals and stock are authoritative here.
  */
 function createOrder(body) {
-  // Honeypot: real visitors never fill this hidden field in.
-  if (String(body.website || '').trim()) {
-    return { success: true, orderNumber: 'RG-0000', date: new Date().toISOString() };
-  }
+  if (String(body.website || '').trim()) return { success: true, orderNumber: 'RG-0000', date: new Date().toISOString() };
 
   const email = String(body.email || '').trim();
   const fullName = String(body.fullName || '').trim();
   const address = String(body.address || '').trim();
   const city = String(body.city || '').trim();
-  if (!email || !fullName || !address || !city) {
-    return { success: false, error: 'Missing required order details.' };
+  const phone = String(body.phone || '').trim();
+  const country = String(body.country || '').trim();
+  const payment = String(body.payment || '').trim();
+  const orderToken = String(body.orderToken || '').trim();
+  if (!email || !fullName || !address || !city || !phone || !country) return { success: false, error: 'Please complete all required delivery details.' };
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { success: false, error: 'Please enter a valid email address.' };
+  if (payment !== 'Cash on Delivery') return { success: false, error: 'This checkout currently supports Cash on Delivery only.' };
+  if (!orderToken) return { success: false, error: 'Missing order token. Please refresh checkout and try again.' };
+
+  let requested = [];
+  try { requested = JSON.parse(body.items || '[]'); } catch (e) { requested = []; }
+  if (!Array.isArray(requested) || !requested.length) return { success: false, error: 'Your bag is empty.' };
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const sheet = getOrdersSheet_();
+    const values = sheet.getDataRange().getValues();
+    const headers = values[0].map(h => String(h).trim());
+    const orderTokenIndex = headers.indexOf('Order Token');
+    if (orderTokenIndex >= 0) {
+      const duplicate = values.slice(1).find(r => String(r[orderTokenIndex] || '').trim() === orderToken);
+      if (duplicate) return { success: true, orderNumber: String(duplicate[0]), date: duplicate[1] instanceof Date ? duplicate[1].toISOString() : String(duplicate[1] || '') };
+    }
+
+    const catalog = getMasterProductsForOrder_();
+    const validated = [];
+    let subtotal = 0;
+    const stockUpdates = [];
+    for (const raw of requested) {
+      const id = String(raw.id || raw.externalId || '').trim().toLowerCase();
+      const product = catalog.map[id];
+      const qty = Math.floor(Number(raw.qty || 0));
+      const size = String(raw.size || '').trim();
+      if (!product || product.status !== 'active') return { success: false, error: `One of the selected products is no longer available.` };
+      if (!Number.isFinite(qty) || qty < 1 || qty > 50) return { success: false, error: `Invalid quantity for ${product.name}.` };
+      if (product.stock < qty) return { success: false, error: `${product.name} is no longer available in the requested quantity.` };
+      if (product.sizes.length && size && !product.sizes.includes(size)) return { success: false, error: `${product.name} does not have size ${size}.` };
+      const lineTotal = product.price * qty;
+      subtotal += lineTotal;
+      validated.push({ id: product.id, name: product.name, size: size || (product.sizes[0] || 'ONE SIZE'), qty, price: product.price });
+      stockUpdates.push({ row: catalog.sheet.getDataRange().getValues().findIndex(r => String(r[catalog.idx.ID] || '').trim() === product.id) + 1, newStock: product.stock - qty });
+    }
+
+    const shipping = 0; // Set the live shipping rule here before launch.
+    const total = subtotal + shipping;
+    const orderNumber = generateNextOrderNumber_(sheet);
+    const date = new Date();
+    const row = [orderNumber, date.toISOString(), email, phone, fullName, country, city, String(body.postalCode || '').trim(), address, payment, JSON.stringify(validated), subtotal, shipping, total, 'Pending', orderToken, '', ''];
+    sheet.getRange(sheet.getLastRow() + 1, 1, 1, ORDER_HEADERS.length).setValues([row]);
+
+    // Decrement inventory atomically with the order creation.
+    stockUpdates.forEach(u => { if (u.row > 1) catalog.sheet.getRange(u.row, catalog.idx.Stock + 1).setValue(u.newStock); });
+
+    const order = { orderNumber, date: date.toISOString(), email, phone, fullName, country, city, postalCode: String(body.postalCode || '').trim(), address, payment, items: validated, subtotal, shipping, total, status: 'Pending', trackingNumber: '', trackingUrl: '' };
+    notifyOrderCreated_(order);
+    notifyAdminNewOrder_(order);
+    return { success: true, orderNumber, date: date.toISOString() };
+  } finally {
+    lock.releaseLock();
   }
-
-  let items = [];
-  try { items = JSON.parse(body.items || '[]'); } catch (e) { items = []; }
-  if (!Array.isArray(items) || !items.length) {
-    return { success: false, error: 'Your bag is empty.' };
-  }
-
-  const sheet = getOrdersSheet_();
-  const orderNumber = generateNextOrderNumber_(sheet);
-  const date = new Date();
-
-  const row = [
-    orderNumber,
-    date.toISOString(),
-    email,
-    String(body.phone || '').trim(),
-    fullName,
-    String(body.country || '').trim(),
-    city,
-    String(body.postalCode || '').trim(),
-    address,
-    String(body.payment || '').trim(),
-    JSON.stringify(items),
-    Number(body.total || 0),
-    'Pending'
-  ];
-
-  sheet.getRange(sheet.getLastRow() + 1, 1, 1, ORDER_HEADERS.length).setValues([row]);
-
-  return { success: true, orderNumber, date: date.toISOString() };
 }
 
 /**
@@ -436,63 +565,104 @@ function createOrder(body) {
  */
 function getOrders(params) {
   if (!checkEditPassword_(params.password)) return { success: false, error: 'Invalid password' };
-
   const sheet = getOrdersSheet_();
   const values = sheet.getDataRange().getValues();
   if (values.length < 2) return { success: true, orders: [] };
-
   const headers = values[0].map(h => String(h).trim());
-  const idx = {};
-  ORDER_HEADERS.forEach(h => { idx[h] = headers.indexOf(h); });
-
+  const idx = {}; headers.forEach((h, i) => idx[h] = i);
   const orders = values.slice(1).map(row => {
-    let items = [];
-    try { items = JSON.parse(row[idx['Items']] || '[]'); } catch (e) { items = []; }
+    let items = []; try { items = JSON.parse(row[idx['Items']] || '[]'); } catch (e) {}
     return {
       orderNumber: String(row[idx['Order Number']] || '').trim(),
       date: row[idx['Date']] instanceof Date ? row[idx['Date']].toISOString() : String(row[idx['Date']] || ''),
-      email: String(row[idx['Email']] || '').trim(),
-      phone: String(row[idx['Phone']] || '').trim(),
-      fullName: String(row[idx['Full Name']] || '').trim(),
-      country: String(row[idx['Country']] || '').trim(),
-      city: String(row[idx['City']] || '').trim(),
-      postalCode: String(row[idx['Postal Code']] || '').trim(),
-      address: String(row[idx['Address']] || '').trim(),
-      payment: String(row[idx['Payment']] || '').trim(),
-      items,
-      total: Number(row[idx['Total']] || 0),
-      status: String(row[idx['Status']] || 'Pending').trim()
+      email: String(row[idx['Email']] || '').trim(), phone: String(row[idx['Phone']] || '').trim(),
+      fullName: String(row[idx['Full Name']] || '').trim(), country: String(row[idx['Country']] || '').trim(),
+      city: String(row[idx['City']] || '').trim(), postalCode: String(row[idx['Postal Code']] || '').trim(),
+      address: String(row[idx['Address']] || '').trim(), payment: String(row[idx['Payment']] || '').trim(),
+      items, subtotal: Number(row[idx['Subtotal']] || row[idx['Total']] || 0), shipping: Number(row[idx['Shipping']] || 0),
+      total: Number(row[idx['Total']] || 0), status: String(row[idx['Status']] || 'Pending').trim(),
+      trackingNumber: String(row[idx['Tracking Number']] || '').trim(), trackingUrl: String(row[idx['Tracking URL']] || '').trim()
     };
   }).filter(o => o.orderNumber);
-
-  orders.reverse(); // newest first (rows were appended oldest-first)
+  orders.reverse();
   return { success: true, orders };
 }
 
-/**
- * Updates the Status cell for a single order. Requires the shared edit
- * password.
- */
 function updateOrderStatus(params) {
   if (!checkEditPassword_(params.password)) return { success: false, error: 'Invalid password' };
-
   const orderNumber = String(params.orderNumber || '').trim();
   const status = String(params.status || '').trim();
-  if (!orderNumber || !status) return { success: false, error: 'Missing orderNumber or status' };
+  const allowed = ['Pending', 'Confirmed', 'Shipped', 'Cancelled'];
+  if (!orderNumber || !allowed.includes(status)) return { success: false, error: 'Invalid order status.' };
 
   const sheet = getOrdersSheet_();
   const values = sheet.getDataRange().getValues();
   const headers = values[0].map(h => String(h).trim());
-  const orderNumberIndex = headers.indexOf('Order Number');
-  const statusIndex = headers.indexOf('Status');
-
+  const idx = {}; headers.forEach((h, i) => idx[h] = i);
   for (let i = 1; i < values.length; i++) {
-    if (String(values[i][orderNumberIndex] || '').trim() === orderNumber) {
-      sheet.getRange(i + 1, statusIndex + 1).setValue(status);
+    if (String(values[i][idx['Order Number']] || '').trim() === orderNumber) {
+      const oldStatus = String(values[i][idx['Status']] || 'Pending').trim();
+      sheet.getRange(i + 1, idx['Status'] + 1).setValue(status);
+      const trackingNumber = String(params.trackingNumber || values[i][idx['Tracking Number']] || '').trim();
+      const trackingUrl = String(params.trackingUrl || values[i][idx['Tracking URL']] || '').trim();
+      if (idx['Tracking Number'] >= 0) sheet.getRange(i + 1, idx['Tracking Number'] + 1).setValue(trackingNumber);
+      if (idx['Tracking URL'] >= 0) sheet.getRange(i + 1, idx['Tracking URL'] + 1).setValue(trackingUrl);
+      const order = {
+        orderNumber, email: String(values[i][idx['Email']] || '').trim(), fullName: String(values[i][idx['Full Name']] || '').trim(),
+        items: (() => { try { return JSON.parse(values[i][idx['Items']] || '[]'); } catch (e) { return []; } })(),
+        total: Number(values[i][idx['Total']] || 0), trackingNumber, trackingUrl
+      };
+      if (oldStatus !== status) notifyOrderStatus_(order, status);
       return { success: true };
     }
   }
   return { success: false, error: 'Order not found.' };
+}
+
+/* =========================================================================
+ * CLIENT SERVICES + NEWSLETTER
+ * ========================================================================= */
+
+const CONTACT_HEADERS = ['Date', 'Name', 'Email', 'Subject', 'Message', 'Status'];
+const NEWSLETTER_HEADERS = ['Date', 'Email', 'Source', 'Status'];
+
+function ensureSimpleSheet_(name, headers) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(name);
+  if (!sheet) sheet = ss.insertSheet(name);
+  const current = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), headers.length)).getValues()[0].map(h => String(h).trim());
+  headers.forEach((h, i) => { if (current.indexOf(h) === -1) sheet.getRange(1, sheet.getLastColumn() + 1).setValue(h); });
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold'); sheet.setFrozenRows(1);
+  return sheet;
+}
+
+function submitContact(body) {
+  const name = String(body.name || '').trim(), email = String(body.email || '').trim(), subject = String(body.subject || '').trim(), message = String(body.message || '').trim();
+  if (!name || !email || !subject || !message) return { success:false, error:'Please complete all contact fields.' };
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { success:false, error:'Please enter a valid email address.' };
+  const sheet = ensureSimpleSheet_('Messages', CONTACT_HEADERS);
+  sheet.appendRow([new Date().toISOString(), name, email, subject, message, 'New']);
+  const admin = getAdminEmail_();
+  if (admin) sendCustomerEmail_(admin, `ROUGE Client Message — ${subject}`, `<div style="font-family:Arial,sans-serif;line-height:1.7"><h2>${escapeEmailHtml_(subject)}</h2><p><strong>${escapeEmailHtml_(name)}</strong> — ${escapeEmailHtml_(email)}</p><p>${escapeEmailHtml_(message).replace(/\n/g,'<br>')}</p></div>`);
+  return { success:true };
+}
+
+function subscribeNewsletter(body) {
+  const email = String(body.email || '').trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { success:false, error:'Please enter a valid email address.' };
+  const sheet = ensureSimpleSheet_('Newsletter', NEWSLETTER_HEADERS);
+  const values = sheet.getDataRange().getValues();
+  const emailIndex = NEWSLETTER_HEADERS.indexOf('Email');
+  if (values.slice(1).some(r => String(r[emailIndex] || '').trim().toLowerCase() === email)) return { success:true, alreadySubscribed:true };
+  sheet.appendRow([new Date().toISOString(), email, String(body.source || 'website').trim(), 'Subscribed']);
+  return { success:true };
+}
+
+function setupClientServiceSheets() {
+  ensureSimpleSheet_('Messages', CONTACT_HEADERS);
+  ensureSimpleSheet_('Newsletter', NEWSLETTER_HEADERS);
+  return 'Ready: Messages + Newsletter';
 }
 
 /**

@@ -90,9 +90,11 @@
     <div class="row"><span>Address</span><span id="m_address"></span></div>
     <div class="row"><span>City / Country</span><span id="m_city"></span></div>
     <div class="row"><span>Payment</span><span id="m_payment"></span></div>
+    <div class="row"><span>Tracking #</span><input id="m_tracking_number" style="width:55%" /></div>
+    <div class="row"><span>Tracking URL</span><input id="m_tracking_url" style="width:55%" /></div>
     <h3 style="margin-top:18px;font-size:1.1rem">Items</h3>
     <div id="m_items"></div>
-    <div style="margin-top:18px;text-align:right"><button class="btn ghost" id="closeOrderModal">CLOSE</button></div>
+    <div style="margin-top:18px;text-align:right"><button class="btn ghost" onclick="saveTracking()">SAVE TRACKING</button> <button class="btn ghost" id="closeOrderModal">CLOSE</button></div>
   </div>
 </div>
 
@@ -255,12 +257,15 @@ window.viewOrder = function(i){
   document.getElementById('m_address').textContent = o.address;
   document.getElementById('m_city').textContent = `${o.city}${o.postalCode ? ', ' + o.postalCode : ''} — ${o.country}`;
   document.getElementById('m_payment').textContent = o.payment;
+  document.getElementById('m_tracking_number').value = o.trackingNumber || '';
+  document.getElementById('m_tracking_url').value = o.trackingUrl || '';
   document.getElementById('m_items').innerHTML = (o.items||[]).map(it =>
     `<div class="item-line">${escapeHtml(it.name)} × ${it.qty} <span style="color:var(--muted)">SIZE ${escapeHtml(it.size)}</span> — ${money(it.price*it.qty)}</div>`
   ).join('') || '<p class="hint">No item detail recorded.</p>';
   document.getElementById('orderModalBackdrop').classList.add('open');
 };
 document.getElementById('closeOrderModal').onclick = () => document.getElementById('orderModalBackdrop').classList.remove('open');
+window.saveTracking = async function(){ const title=document.getElementById('orderModalTitle').textContent; const data=await authed('updateOrderStatus',{orderNumber:title,status:ORDERS.find(o=>o.orderNumber===title)?.status||'Pending',trackingNumber:document.getElementById('m_tracking_number').value.trim(),trackingUrl:document.getElementById('m_tracking_url').value.trim()}); if(data.success){const o=ORDERS.find(o=>o.orderNumber===title);if(o){o.trackingNumber=document.getElementById('m_tracking_number').value.trim();o.trackingUrl=document.getElementById('m_tracking_url').value.trim()}toast('Tracking saved ✓')}else toast('Error: '+(data.error||'could not save'),true);};
 </script>
 </body>
 </html>
