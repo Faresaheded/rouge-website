@@ -98,76 +98,9 @@ RED</h3><button data-shop-now="accessories.html">SHOP NOW →</button></div></ar
 
   <div class="search-modal" id="searchModal"><button id="closeSearch">×</button><p>SEARCH ROUGE</p><input id="searchInput" type="search" placeholder="Search dresses, collections..."/></div>
 
-  <script src="rouge-data.js?v=20260819-v48"></script><script src="rouge-content.js?v=20260823a"></script><script src="rouge-edit.js?v=20260823a"></script>
+  <script src="supabase-config.js"></script><script src="rouge-data.js?v=20260819-v48"></script><script src="rouge-content.js?v=20260823a"></script><script src="rouge-edit.js?v=20260823a"></script>
 <script>
-(function loadHomepageImages(){
-  const API = window.ROUGE_API_URL || 'https://script.google.com/macros/s/AKfycbwLnGjb7qiKsGNmkfkxhQGZ7xFC4pus8Ur2NHi9pMM-vdo8MMReg1KfwQq78ranPuUe/exec';
-  const fallback = {
-    dresses: { image: 'assets/hero.png', alt: 'White dress editorial' },
-    clothing: { image: 'assets/hero.png', alt: 'Clothing editorial' },
-    accessories: { image: 'assets/hero.png', alt: 'Accessories editorial' }
-  };
-
-  function apply(data){
-    if(!data || !data.success || !data.images) return;
-    document.querySelectorAll('[data-homepage-image]').forEach(img=>{
-      const key = img.dataset.homepageImage;
-      const item = data.images[key];
-      if(!item || !item.image) return;
-      // The API may return a normal Google Drive sharing URL.
-      // <img> cannot render the /file/d/.../view page directly, so convert it
-      // to a browser-renderable Drive thumbnail URL first.
-      const imageUrl = normalizeHomepageImageUrl(item.image);
-      if(!imageUrl) return;
-
-      img.src = imageUrl + (imageUrl.indexOf('?') >= 0 ? '&' : '?') + 'v=' + Date.now();
-      img.onerror = () => {
-        // Fallback to the original URL in case the thumbnail endpoint is unavailable.
-        if (img.dataset.originalImage && img.src !== img.dataset.originalImage) {
-          img.onerror = null;
-          img.src = img.dataset.originalImage;
-        }
-      };
-      img.dataset.originalImage = item.image;
-      if(item.alt) img.alt = item.alt;
-      const title = document.querySelector('[data-homepage-title=\"' + key + '\"]');
-      if(title && item.title) title.textContent = String(item.title).replace(/\\n/g, '\n');
-    });
-  }
-
-  function normalizeHomepageImageUrl(value){
-    const s = String(value || '').trim();
-    if(!s) return '';
-
-    // Google Drive: /file/d/FILE_ID/view, /open?id=FILE_ID,
-    // /uc?id=FILE_ID, or /thumbnail?id=FILE_ID.
-    if(/drive\.google\.com/i.test(s)){
-      let id = '';
-      let match = s.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/i);
-      if(match) id = match[1];
-
-      if(!id){
-        match = s.match(/[?&]id=([a-zA-Z0-9_-]+)/i);
-        if(match) id = match[1];
-      }
-
-      if(id){
-        return 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(id) + '&sz=w1600';
-      }
-    }
-
-    return s;
-  }
-
-  const callbackName = '__rougeHomepageImages_' + Date.now() + '_' + Math.random().toString(36).slice(2);
-  const script = document.createElement('script');
-  const cleanup = ()=>{ try{delete window[callbackName]}catch(e){} script.remove(); };
-  const timeout = setTimeout(cleanup, 10000);
-  window[callbackName] = data=>{ clearTimeout(timeout); apply(data); cleanup(); };
-  script.onerror = cleanup;
-  script.src = `${API}?action=homepageImages&callback=${encodeURIComponent(callbackName)}&_=${Date.now()}`;
-  document.head.appendChild(script);
-})();
+(async function loadHomepageImages(){try{const rows=await sbQuery('homepage_images','?select=*');const map={};(rows||[]).forEach(x=>map[x.key]=x);document.querySelectorAll('[data-homepage-image]').forEach(img=>{const key=img.dataset.homepageImage,item=map[key];if(!item||!item.image)return;const url=normalizeImageUrl(item.image);if(url)img.src=url+'?v='+Date.now();if(item.alt)img.alt=item.alt;const title=document.querySelector('[data-homepage-title="'+key+'"]');if(title&&item.title)title.textContent=String(item.title).replace(/\\n/g,'\n')})}catch(e){console.warn('ROUGE homepage images:',e.message)}})();
 </script>
 <script src="script.js"></script></body>
 </html>

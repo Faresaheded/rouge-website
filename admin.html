@@ -100,172 +100,22 @@
 
 <div id="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
 <script>
-const ROUGE_API_URL = 'https://script.google.com/macros/s/AKfycbwLnGjb7qiKsGNmkfkxhQGZ7xFC4pus8Ur2NHi9pMM-vdo8MMReg1KfwQq78ranPuUe/exec';
-let PASSWORD = (sessionStorage.getItem('rougeAdminPassword') || '').trim();
-let ORDERS = [];
-const STATUSES = ['Pending', 'Confirmed', 'Shipped', 'Cancelled'];
-
-function money(n){ return 'EGP ' + Number(n||0).toLocaleString(); }
-function escapeHtml(v){ return String(v??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-function statusClass(s){ return 'status-' + String(s||'pending').toLowerCase(); }
-
-function toast(msg, isError){
-  const t=document.getElementById('toast');
-  t.style.background=isError?'#7a1a1a':'#1a1a1a';
-  t.textContent=msg; t.style.opacity='1';
-  clearTimeout(t._timer); t._timer=setTimeout(()=>t.style.opacity='0',2400);
-}
-
-function jsonp(action){
-  return new Promise((resolve)=>{
-    const cb='__adminCb_'+Date.now()+'_'+Math.random().toString(36).slice(2);
-    const script=document.createElement('script');
-    const cleanup=()=>{try{delete window[cb]}catch(e){window[cb]=undefined}script.remove()};
-    const timeout=setTimeout(()=>{cleanup();resolve({success:false,error:'timeout'})},15000);
-    window[cb]=(data)=>{clearTimeout(timeout);cleanup();resolve(data)};
-    script.onerror=()=>{clearTimeout(timeout);cleanup();resolve({success:false,error:'network error'})};
-    script.src=`${ROUGE_API_URL}?action=${action}&callback=${encodeURIComponent(cb)}&_=${Date.now()}`;
-    document.head.appendChild(script);
-  });
-}
-
-async function authed(action, fields){
-  return new Promise((resolve) => {
-    const cb = '__adminAuth_' + Date.now() + '_' + Math.random().toString(36).slice(2);
-    const script = document.createElement('script');
-    let settled = false;
-    const finish = (data) => {
-      if (settled) return;
-      settled = true;
-      try { delete window[cb]; } catch (e) { window[cb] = undefined; }
-      script.remove();
-      if (!data.success && data.error === 'Invalid password') {
-        sessionStorage.removeItem('rougeAdminPassword');
-        document.getElementById('loginGate').style.display='flex';
-      }
-      resolve(data);
-    };
-    const timeout = setTimeout(() => {
-      finish({ success:false, error:'Request timed out — check your connection and try again' });
-    }, 25000);
-    window[cb] = (data) => { clearTimeout(timeout); finish(data); };
-    script.onerror = () => { clearTimeout(timeout); finish({ success:false, error:'Could not reach the ROUGE API' }); };
-    const params = new URLSearchParams({ action, password: PASSWORD, callback: cb, _: Date.now(), ...(fields||{}) });
-    script.src = `${ROUGE_API_URL}?${params.toString()}`;
-    document.head.appendChild(script);
-  });
-}
-
-/* ---------- login ---------- */
-document.getElementById('pwSubmit').onclick = async () => {
-  const candidate = document.getElementById('pwInput').value.trim();
-  const submitBtn = document.getElementById('pwSubmit');
-  submitBtn.disabled = true;
-  PASSWORD = candidate;
-  const data = await authed('getOrders'); // validates the password against the server before unlocking anything
-  submitBtn.disabled = false;
-  if (!data.success) {
-    if (data.error !== 'Invalid password') toast('Error: ' + (data.error||'could not verify password'), true);
-    document.getElementById('pwInput').value = '';
-    document.getElementById('pwInput').focus();
-    return; // login gate stays visible — nothing is shown until the password checks out
-  }
-  sessionStorage.setItem('rougeAdminPassword', PASSWORD);
-  document.getElementById('loginGate').style.display='none';
-  ORDERS = data.orders || [];
-  renderKpis();
-  renderOrders();
-  loadStockKpi();
-};
-document.getElementById('pwInput').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('pwSubmit').click(); });
-if (PASSWORD) { document.getElementById('loginGate').style.display='none'; loadEverything(); }
-
-/* ---------- data ---------- */
-async function loadEverything(){
-  await Promise.all([loadOrders(), loadStockKpi()]);
-}
-
-async function loadOrders(){
-  const data = await authed('getOrders');
-  if (!data.success){
-    if (data.error !== 'Invalid password') toast('Error: ' + (data.error||'could not load orders'), true);
-    return;
-  }
-  ORDERS = data.orders || [];
-  renderKpis();
-  renderOrders();
-}
-
-async function loadStockKpi(){
-  const data = await jsonp('products');
-  const products = (data && data.success) ? data.products : [];
-  const low = products.filter(p => Number(p.stock||0) <= 2).length;
-  document.getElementById('stockKpi').textContent = low;
-}
-
-function renderKpis(){
-  document.getElementById('ordersKpi').textContent = ORDERS.length;
-  document.getElementById('salesKpi').textContent = money(ORDERS.reduce((s,o)=>s+Number(o.total||0),0));
-  document.getElementById('pendingKpi').textContent = ORDERS.filter(o=>String(o.status).toLowerCase()==='pending').length;
-}
-
-function renderOrders(){
-  const tbody = document.getElementById('orderRows');
-  if (!ORDERS.length){ tbody.innerHTML = '<tr><td colspan="7" class="empty">No orders yet.</td></tr>'; return; }
-  tbody.innerHTML = ORDERS.map((o,i) => `
-    <tr>
-      <td>${escapeHtml(o.orderNumber)}</td>
-      <td>${escapeHtml(o.date)}</td>
-      <td>${escapeHtml(o.fullName)}<br><span style="color:var(--muted);font-size:.72rem">${escapeHtml(o.email)}</span></td>
-      <td>${money(o.total)}</td>
-      <td>${escapeHtml(o.payment)}</td>
-      <td>
-        <select class="status-select" data-index="${i}">
-          ${STATUSES.map(s=>`<option value="${s}" ${s===o.status?'selected':''}>${s}</option>`).join('')}
-        </select>
-      </td>
-      <td><button class="btn ghost" onclick="viewOrder(${i})">VIEW</button></td>
-    </tr>`).join('');
-
-  tbody.querySelectorAll('.status-select').forEach(sel => {
-    sel.addEventListener('change', async () => {
-      const i = Number(sel.dataset.index);
-      const order = ORDERS[i];
-      const newStatus = sel.value;
-      sel.disabled = true;
-      const data = await authed('updateOrderStatus', { orderNumber: order.orderNumber, status: newStatus });
-      sel.disabled = false;
-      if (data.success){
-        order.status = newStatus;
-        toast('Status updated ✓');
-        renderKpis();
-      } else {
-        sel.value = order.status;
-        toast('Error: ' + (data.error||'could not update'), true);
-      }
-    });
-  });
-}
-
-window.viewOrder = function(i){
-  const o = ORDERS[i];
-  if (!o) return;
-  document.getElementById('orderModalTitle').textContent = o.orderNumber;
-  document.getElementById('m_email').textContent = o.email;
-  document.getElementById('m_phone').textContent = o.phone;
-  document.getElementById('m_address').textContent = o.address;
-  document.getElementById('m_city').textContent = `${o.city}${o.postalCode ? ', ' + o.postalCode : ''} — ${o.country}`;
-  document.getElementById('m_payment').textContent = o.payment;
-  document.getElementById('m_tracking_number').value = o.trackingNumber || '';
-  document.getElementById('m_tracking_url').value = o.trackingUrl || '';
-  document.getElementById('m_items').innerHTML = (o.items||[]).map(it =>
-    `<div class="item-line">${escapeHtml(it.name)} × ${it.qty} <span style="color:var(--muted)">SIZE ${escapeHtml(it.size)}</span> — ${money(it.price*it.qty)}</div>`
-  ).join('') || '<p class="hint">No item detail recorded.</p>';
-  document.getElementById('orderModalBackdrop').classList.add('open');
-};
-document.getElementById('closeOrderModal').onclick = () => document.getElementById('orderModalBackdrop').classList.remove('open');
-window.saveTracking = async function(){ const title=document.getElementById('orderModalTitle').textContent; const data=await authed('updateOrderStatus',{orderNumber:title,status:ORDERS.find(o=>o.orderNumber===title)?.status||'Pending',trackingNumber:document.getElementById('m_tracking_number').value.trim(),trackingUrl:document.getElementById('m_tracking_url').value.trim()}); if(data.success){const o=ORDERS.find(o=>o.orderNumber===title);if(o){o.trackingNumber=document.getElementById('m_tracking_number').value.trim();o.trackingUrl=document.getElementById('m_tracking_url').value.trim()}toast('Tracking saved ✓')}else toast('Error: '+(data.error||'could not save'),true);};
+const supaAdmin=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);let SESSION=null,ORDERS=[],PRODUCTS=[];
+function toast(msg,isError){const t=document.getElementById('toast');t.style.background=isError?'#7a1a1a':'#1a1a1a';t.textContent=msg;t.style.opacity='1';clearTimeout(t._timer);t._timer=setTimeout(()=>t.style.opacity='0',2400)}
+async function adminFetch(path,options={}){if(!SESSION)throw new Error('Please sign in.');return sbFetchWithToken(path,SESSION.access_token,options)}
+async function isAdmin(){const rows=await adminFetch('/admin_users?select=user_id&user_id=eq.'+encodeURIComponent(SESSION.user.id));return rows?.length>0}
+async function login(){const email=document.getElementById('pwInput').dataset.email||prompt('ROUGE admin email');const password=document.getElementById('pwInput').value.trim();if(!email||!password){toast('Email and password are required.',true);return}const r=await supaAdmin.auth.signInWithPassword({email:email.trim(),password});if(r.error){toast(r.error.message,true);return}SESSION=r.data.session;if(!(await isAdmin())){await supaAdmin.auth.signOut();SESSION=null;toast('This account is not an ROUGE admin.',true);return}document.getElementById('loginGate').style.display='none';await Promise.all([loadOrders(),loadStockKpi()])}
+document.getElementById('pwSubmit').onclick=login;document.getElementById('pwInput').addEventListener('keydown',e=>{if(e.key==='Enter')login()});const gateNote=document.querySelector('#loginGate p');if(gateNote){const email=document.createElement('input');email.type='email';email.placeholder='Admin email';email.style.cssText='width:100%;box-sizing:border-box;margin:10px 0;padding:12px';const pw=document.getElementById('pwInput');pw.dataset.email='';pw.parentNode.insertBefore(email,pw);email.addEventListener('input',()=>pw.dataset.email=email.value.trim())}
+async function loadOrders(){try{ORDERS=await adminFetch('/orders?select=*&order=order_date.desc');renderOrders()}catch(e){toast('Error: '+e.message,true)}}
+async function loadStockKpi(){try{PRODUCTS=await adminFetch('/products?select=id,name,stock,status');const active=PRODUCTS.filter(p=>String(p.status).toLowerCase()==='active');const low=active.filter(p=>Number(p.stock)<=5).length;const el=document.getElementById('stockKpi');if(el)el.textContent=low+' LOW STOCK'}catch(e){}}
+function renderOrders(){const tbody=document.getElementById('orderRows');if(!tbody)return;if(!ORDERS.length){tbody.innerHTML='<tr><td colspan="8" class="empty">No orders yet.</td></tr>';return}tbody.innerHTML=ORDERS.map(o=>`<tr><td>${escapeHtml(o.order_number)}</td><td>${escapeHtml(o.full_name)}</td><td>${escapeHtml(o.email)}</td><td>EGP ${Number(o.total||0).toLocaleString()}</td><td>${escapeHtml(o.status||'Pending')}</td><td>${escapeHtml(o.city||'')}</td><td>${escapeHtml(o.payment||'')}</td><td><button class="btn ghost" onclick="openOrder('${escapeHtml(o.order_number)}')">VIEW</button></td></tr>`).join('')}
+function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+window.openOrder=function(no){const o=ORDERS.find(x=>x.order_number===no);if(!o)return;document.getElementById('orderModalTitle').textContent=o.order_number;document.getElementById('m_email').textContent=o.email||'';document.getElementById('m_phone').textContent=o.phone||'';document.getElementById('m_address').textContent=o.address||'';document.getElementById('m_city').textContent=(o.city||'')+' / '+(o.country||'');document.getElementById('m_payment').textContent=o.payment||'';document.getElementById('m_tracking_number').value=o.tracking_number||'';document.getElementById('m_tracking_url').value=o.tracking_url||'';const items=document.getElementById('m_items');if(items)items.innerHTML=(o.items||[]).map(x=>`<div>${escapeHtml(x.name)} × ${x.qty} — ${escapeHtml(x.size||'ONE SIZE')} — EGP ${Number(x.price||0).toLocaleString()}</div>`).join('');document.getElementById('orderModalBackdrop').classList.add('open')};document.getElementById('closeOrderModal').onclick=closeOrderModal;
+window.closeOrderModal=function(){document.getElementById('orderModalBackdrop').classList.remove('open')};
+window.saveTracking=async function(){const no=document.getElementById('orderModalTitle').textContent;try{await adminFetch('/orders?order_number=eq.'+encodeURIComponent(no),{method:'PATCH',body:JSON.stringify({tracking_number:document.getElementById('m_tracking_number').value.trim(),tracking_url:document.getElementById('m_tracking_url').value.trim(),updated_at:new Date().toISOString()})});toast('Tracking saved ✓');await loadOrders()}catch(e){toast('Error: '+e.message,true)}};
 </script>
 </body>
 </html>

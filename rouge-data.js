@@ -1,7 +1,5 @@
-/* ROUGE product/data layer — Google Sheets connected */
-const ROUGE_API_URL = 'https://script.google.com/macros/s/AKfycbwLnGjb7qiKsGNmkfkxhQGZ7xFC4pus8Ur2NHi9pMM-vdo8MMReg1KfwQq78ranPuUe/exec';
+/* ROUGE product/data layer — Supabase connected */
 
-// Kept as a fallback so the design still works if the API is temporarily unavailable.
 const ROUGE_FALLBACK_PRODUCTS = [
 {id:1,externalId:'R001',name:'White Silk Dress',category:'Dresses',price:2850,tag:'NEW IN',color:'Ivory',sizes:['XS','S','M','L','XL'],stock:10,image:'assets/products/1.svg',images:['assets/products/1.svg'],description:'A sculpted silk silhouette with an effortless drape, designed for evening light and unforgettable entrances.',material:'92% silk, 8% elastane',sku:'ROG-001'},
 {id:2,externalId:'R002',name:'Rouge Evening Dress',category:'Evening',price:3200,tag:'SIGNATURE',color:'Rouge',sizes:['XS','S','M','L'],stock:8,image:'assets/products/2.svg',images:['assets/products/2.svg'],description:'A deep rouge evening silhouette cut to move with the body and catch the light.',material:'Satin viscose blend',sku:'ROG-002'},
@@ -16,42 +14,12 @@ const ROUGE_FALLBACK_PRODUCTS = [
 let ROUGE_PRODUCTS = ROUGE_FALLBACK_PRODUCTS.map(x => ({...x}));
 let ROUGE_PRODUCTS_READY = false;
 let ROUGE_PRODUCTS_ERROR = null;
-
 const money = n => `EGP ${Number(n || 0).toLocaleString('en-EG')}`;
 const cartKey='rougeCartV4', wishKey='rougeWishlistV4', ordersKey='rougeOrdersV4';
 
-function onRougeReady(callback){
-  if(ROUGE_PRODUCTS_READY) callback();
-  else window.addEventListener('rougeProductsReady', callback, {once:true});
-}
-
-function getDriveId(value){
-  const url = String(value || '').trim();
-  if(!url) return '';
-  const patterns = [
-    /drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/,
-    /drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/,
-    /drive\.google\.com\/uc\?(?:[^#]*?&)?id=([a-zA-Z0-9_-]+)/,
-    /drive\.google\.com\/thumbnail\?id=([a-zA-Z0-9_-]+)/
-  ];
-  for(const re of patterns){ const m=url.match(re); if(m) return m[1]; }
-  if(/^[a-zA-Z0-9_-]{20,}$/.test(url)) return url;
-  return '';
-}
-
-function imageCandidates(value){
-  const url = String(value || '').trim();
-  if(!url) return [];
-  const id = getDriveId(url);
-  if(id){
-    return [
-      `https://drive.google.com/thumbnail?id=${id}&sz=w1600`,
-      `https://drive.google.com/uc?export=view&id=${id}`,
-      url
-    ];
-  }
-  return [url];
-}
+function onRougeReady(callback){ if(ROUGE_PRODUCTS_READY) callback(); else window.addEventListener('rougeProductsReady', callback, {once:true}); }
+function getDriveId(value){ const url=String(value||'').trim(); if(!url)return ''; const patterns=[/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/,/drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/,/drive\.google\.com\/uc\?(?:[^#]*?&)?id=([a-zA-Z0-9_-]+)/,/drive\.google\.com\/thumbnail\?id=([a-zA-Z0-9_-]+)/]; for(const re of patterns){const m=url.match(re);if(m)return m[1]} if(/^[a-zA-Z0-9_-]{20,}$/.test(url))return url; return ''; }
+function imageCandidates(value){const url=String(value||'').trim();if(!url)return [];const id=getDriveId(url);return id?[`https://drive.google.com/thumbnail?id=${id}&sz=w1600`,`https://drive.google.com/uc?export=view&id=${id}`,url]:[url];}
 function normalizeImageUrl(value){return imageCandidates(value)[0]||'';}
 function imageFallbackAttrs(value){const c=imageCandidates(value).slice(1);return c.length?` data-image-fallbacks="${encodeURIComponent(JSON.stringify(c))}"`:'';}
 function handleImageFallback(img){try{const list=JSON.parse(decodeURIComponent(img.dataset.imageFallbacks||'[]'));const next=list.shift();if(next){img.dataset.imageFallbacks=encodeURIComponent(JSON.stringify(list));img.src=next;}else img.classList.add('image-unavailable');}catch(e){img.classList.add('image-unavailable');}}
@@ -60,91 +28,20 @@ function productImageMarkup(p, extraClass=''){const src=p.image||`assets/product
 function pageProductImageMarkup(p,pageKey,extraClass=''){const o=p.pageOverrides?.[pageKey]||{};const src=o.image||p.image||`assets/products/${p.id}.svg`;const fallback=o.image||p.originalImage||src;return `<img class="${extraClass}" src="${src}" alt="${escapeHtml(o.title||p.name)}"${imageFallbackAttrs(fallback)} onerror="handleImageFallback(this)">`;}
 function pageProductTitle(p,pageKey){return String((p.pageOverrides?.[pageKey]?.title||p.name||'')).trim();}
 function pageProductSort(p,pageKey){return Number(p.pageOverrides?.[pageKey]?.sortOrder||0);}
+function normalizeProduct(raw,index){const rawId=String(raw.id||raw.ID||'').trim();const numericId=Number((rawId.match(/\d+/)||[index+1])[0])||index+1;const originalImages=Array.isArray(raw.images)?raw.images.map(x=>String(x||'').trim()).filter(Boolean):[];const images=originalImages.map(normalizeImageUrl).filter(Boolean);const image=images[0]||`assets/products/${numericId}.svg`;const sizes=Array.isArray(raw.sizes)?raw.sizes:(String(raw.sizes||'').split(',').map(x=>x.trim()).filter(Boolean));const finalSizes=sizes.length?sizes:['ONE SIZE'];const totalStock=Number(raw.stock||0);const stockMap=finalSizes.reduce((out,size)=>{out[size]=totalStock;return out},{});return {...raw,id:numericId,externalId:rawId||`R${String(numericId).padStart(3,'0')}`,name:String(raw.name||raw.title||'').trim(),title:String(raw.title||raw.name||'').trim(),category:String(raw.category||'').trim(),price:Number(raw.price||0),description:String(raw.description||'').trim(),color:String(raw.color||'').trim(),sizes:finalSizes,stock:totalStock,stockBySize:stockMap,originalImages:originalImages,images:images.length?images:[image],image,originalImage:originalImages[0]||'',tag:String(raw.tag||(raw.featured?'NEW IN':'ROUGE EDIT')).trim(),material:String(raw.material||'Please see product details.').trim(),sku:String(raw.sku||rawId||`ROG-${String(numericId).padStart(3,'0')}`).trim(),featured:Boolean(raw.featured),status:String(raw.status||'Active').trim(),pages:raw.pages||[],pageOverrides:raw.pageOverrides||{}};}
 
-function normalizeProduct(raw, index){
-  const rawId = String(raw.id || raw.ID || '').trim();
-  const numericId = Number((rawId.match(/\d+/) || [index + 1])[0]) || index + 1;
-  const originalImages = Array.isArray(raw.images) ? raw.images.map(x=>String(x||'').trim()).filter(Boolean) : [];
-  const images = originalImages.map(normalizeImageUrl).filter(Boolean);
-  const image = images[0] || `assets/products/${numericId}.svg`;
-  const sizes = Array.isArray(raw.sizes) && raw.sizes.length ? raw.sizes : ['ONE SIZE'];
-  const totalStock = Number(raw.stock || 0);
-  const stockMap = sizes.reduce((out, size) => { out[size] = totalStock; return out; }, {});
-  return {
-    ...raw,
-    id: numericId,
-    externalId: rawId || `R${String(numericId).padStart(3,'0')}`,
-    name: String(raw.name || '').trim(),
-    category: String(raw.category || '').trim(),
-    price: Number(raw.price || 0),
-    description: String(raw.description || '').trim(),
-    color: String(raw.color || '').trim(),
-    sizes,
-    stock: totalStock,
-    stockBySize: stockMap,
-    originalImages: originalImages,
-    images: images.length ? images : [image],
-    image,
-    tag: String(raw.tag || (raw.featured ? 'NEW IN' : 'ROUGE EDIT')).trim(),
-    material: String(raw.material || 'Please see product details.').trim(),
-    sku: String(raw.sku || rawId || `ROG-${String(numericId).padStart(3,'0')}`).trim(),
-    featured: Boolean(raw.featured),
-    status: String(raw.status || 'Active').trim()
-  };
-}
-
-function loadRougeProducts(){
-  return new Promise((resolve) => {
-    const callbackName = '__rougeProducts_' + Date.now() + '_' + Math.random().toString(36).slice(2);
-    const script = document.createElement('script');
-    const cleanup = () => {
-      try { delete window[callbackName]; } catch(e) { window[callbackName] = undefined; }
-      script.remove();
-    };
-
-    const timeout = setTimeout(() => {
-      cleanup();
-      ROUGE_PRODUCTS_ERROR = new Error('ROUGE API timeout.');
-      // Keep the demo fallback visible if the API cannot be reached.
-      ROUGE_PRODUCTS_READY = true;
-      window.dispatchEvent(new Event('rougeProductsReady'));
-      resolve(ROUGE_PRODUCTS);
-    }, 12000);
-
-    window[callbackName] = (data) => {
-      clearTimeout(timeout);
-      cleanup();
-      try {
-        if (!data || !data.success) throw new Error(data?.error || 'Product API failed');
-        const incoming = Array.isArray(data.products) ? data.products.map((p,i)=>normalizeProduct(p,i)).filter(p=>p.name) : [];
-        if (incoming.length) {
-          ROUGE_PRODUCTS = incoming;
-          ROUGE_PRODUCTS_ERROR = null;
-        } else {
-          ROUGE_PRODUCTS_ERROR = new Error('The API returned no active products.');
-          // Do NOT erase the fallback catalog when API returns no products.
-        }
-      } catch(error) {
-        ROUGE_PRODUCTS_ERROR = error;
-      } finally {
-        ROUGE_PRODUCTS_READY = true;
-        window.dispatchEvent(new Event('rougeProductsReady'));
-        resolve(ROUGE_PRODUCTS);
-      }
-    };
-
-    script.onerror = () => {
-      clearTimeout(timeout);
-      cleanup();
-      ROUGE_PRODUCTS_ERROR = new Error('Could not load the ROUGE product API.');
-      ROUGE_PRODUCTS_READY = true;
-      window.dispatchEvent(new Event('rougeProductsReady'));
-      resolve(ROUGE_PRODUCTS);
-    };
-
-    script.src = `${ROUGE_API_URL}?action=products&callback=${encodeURIComponent(callbackName)}&_=${Date.now()}`;
-    document.head.appendChild(script);
-  });
+async function loadRougeProducts(){
+  try {
+    const [products, assignments] = await Promise.all([
+      sbQuery('products','?select=*'),
+      sbQuery('product_page_assignments','?select=*')
+    ]);
+    const map={};
+    (assignments||[]).forEach(a=>{if(!map[a.product_id])map[a.product_id]={pages:[],overrides:{}};map[a.product_id].pages.push(a.page_key);map[a.product_id].overrides[a.page_key]={title:a.override_title||'',image:a.override_image||'',sortOrder:Number(a.sort_order||0)};});
+    const incoming=(products||[]).filter(p=>String(p.status||'').toLowerCase()==='active').map((p,i)=>normalizeProduct({...p,pages:map[p.id]?.pages||[],pageOverrides:map[p.id]?.overrides||{},images:[p.image1,p.image2,p.image3].filter(Boolean)},i)).filter(p=>p.name);
+    if(incoming.length){ROUGE_PRODUCTS=incoming;ROUGE_PRODUCTS_ERROR=null;}else throw new Error('Supabase returned no active products.');
+  } catch(error) { ROUGE_PRODUCTS_ERROR=error; }
+  ROUGE_PRODUCTS_READY=true;window.dispatchEvent(new Event('rougeProductsReady'));return ROUGE_PRODUCTS;
 }
 loadRougeProducts();
 
@@ -154,7 +51,8 @@ function getWishlist(){try{return JSON.parse(localStorage.getItem(wishKey)||'[]'
 function setWishlist(v){localStorage.setItem(wishKey,JSON.stringify(v));updateWishCount()}
 function updateBagCount(){document.querySelectorAll('[data-bag-count],#bagCount').forEach(e=>e.textContent=getCart().reduce((s,x)=>s+x.qty,0))}
 function updateWishCount(){document.querySelectorAll('[data-wish-count]').forEach(e=>e.textContent=getWishlist().length)}
-function findProduct(id){return ROUGE_PRODUCTS.find(x=>String(x.id)===String(id)||String(x.externalId).toLowerCase()===String(id).toLowerCase())}
+function findProduct(id){return ROUGE_PRODUCTS.find(x=>String(x.id)===String(id)||String(x.externalId)===String(id))}
+
 function addProduct(id,size=null){const p=findProduct(id);if(!p)return;size=size||p.sizes.find(s=>(p.stockBySize?.[s] ?? p.stock)>0)||p.sizes[0];const available=p.stockBySize?.[size] ?? p.stock ?? 99;const c=getCart();const found=c.find(x=>String(x.id)===String(p.id)&&x.size===size);if(found)found.qty=Math.min(found.qty+1,available||99);else c.push({id:p.id,externalId:p.externalId,size,qty:1});setCart(c);openBag?.()}
 function changeQty(id,size,delta){const c=getCart();const x=c.find(i=>String(i.id)===String(id)&&i.size===size);if(!x)return;const p=findProduct(id);const max=p?.stockBySize?.[size] ?? p?.stock ?? 99;x.qty=Math.min(x.qty+delta,max||99);if(x.qty<=0)c.splice(c.indexOf(x),1);setCart(c)}
 function removeCartItem(id,size){setCart(getCart().filter(x=>!(String(x.id)===String(id)&&x.size===size)))}

@@ -133,240 +133,33 @@
 
 <div id="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
 <script>
-const ROUGE_API_URL = 'https://script.google.com/macros/s/AKfycbwLnGjb7qiKsGNmkfkxhQGZ7xFC4pus8Ur2NHi9pMM-vdo8MMReg1KfwQq78ranPuUe/exec';
-let PASSWORD = (sessionStorage.getItem('rougeAdminPassword') || '').trim();
-let PRODUCTS = [];
-
-function getDriveId(v){const s=String(v||'').trim();const p=[/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/,/[?&]id=([a-zA-Z0-9_-]+)/,/drive\.google\.com\/thumbnail\?id=([a-zA-Z0-9_-]+)/];for(const re of p){const m=s.match(re);if(m)return m[1]}return''}
+const supaAdmin = window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+let SESSION=null, PRODUCTS=[];
+function toast(msg,isError){const t=document.getElementById('toast');t.style.background=isError?'#7a1a1a':'#1a1a1a';t.textContent=msg;t.style.opacity='1';clearTimeout(t._timer);t._timer=setTimeout(()=>t.style.opacity='0',2400)}
 function normalizeImageUrl(v){const s=String(v||'').trim();if(!s)return'';const id=getDriveId(s);return id?`https://drive.google.com/thumbnail?id=${id}&sz=w800`:s}
-
-function toast(msg, isError){
-  const t=document.getElementById('toast');
-  t.style.background=isError?'#7a1a1a':'#1a1a1a';
-  t.textContent=msg; t.style.opacity='1';
-  clearTimeout(t._timer); t._timer=setTimeout(()=>t.style.opacity='0',2400);
-}
-
-function jsonp(action){
-  return new Promise((resolve)=>{
-    const cb='__adminCb_'+Date.now()+'_'+Math.random().toString(36).slice(2);
-    const script=document.createElement('script');
-    const cleanup=()=>{try{delete window[cb]}catch(e){window[cb]=undefined}script.remove()};
-    const timeout=setTimeout(()=>{cleanup();resolve({success:false,error:'timeout'})},15000);
-    window[cb]=(data)=>{clearTimeout(timeout);cleanup();resolve(data)};
-    script.onerror=()=>{clearTimeout(timeout);cleanup();resolve({success:false,error:'network error'})};
-    script.src=`${ROUGE_API_URL}?action=${action}&callback=${encodeURIComponent(cb)}&_=${Date.now()}`;
-    document.head.appendChild(script);
-  });
-}
-
-async function post(action, fields){
-  return new Promise((resolve) => {
-    const cb = '__adminSave_' + Date.now() + '_' + Math.random().toString(36).slice(2);
-    const script = document.createElement('script');
-    let settled = false;
-
-    const finish = (data) => {
-      if (settled) return;
-      settled = true;
-      try { delete window[cb]; } catch (e) { window[cb] = undefined; }
-      script.remove();
-      if (!data.success && data.error === 'Invalid password') {
-        sessionStorage.removeItem('rougeAdminPassword');
-        document.getElementById('loginGate').style.display='flex';
-      }
-      resolve(data);
-    };
-
-    const timeout = setTimeout(() => {
-      finish({ success:false, error:'Request timed out — check your internet connection and try again' });
-    }, 25000);
-
-    window[cb] = (data) => { clearTimeout(timeout); finish(data); };
-    script.onerror = () => { clearTimeout(timeout); finish({ success:false, error:'Could not reach the ROUGE API (open the console for details)' }); };
-
-    const params = new URLSearchParams({ action, password: PASSWORD, callback: cb, _: Date.now(), ...fields });
-    script.src = `${ROUGE_API_URL}?${params.toString()}`;
-    document.head.appendChild(script);
-  });
-}
-
-/* ---------- login ---------- */
-document.getElementById('pwSubmit').onclick = () => {
-  PASSWORD = document.getElementById('pwInput').value.trim();
-  sessionStorage.setItem('rougeAdminPassword', PASSWORD);
-  document.getElementById('loginGate').style.display='none';
-  loadEverything();
-};
-document.getElementById('pwInput').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('pwSubmit').click(); });
-
-if (PASSWORD) { document.getElementById('loginGate').style.display='none'; loadEverything(); }
-
-/* ---------- products ---------- */
-async function loadProducts(){
-  const data = await jsonp('products');
-  PRODUCTS = (data && data.success) ? data.products : [];
-  renderProducts();
-}
-
-function renderProducts(){
-  const tbody = document.getElementById('productRows');
-  if (!PRODUCTS.length){ tbody.innerHTML='<tr><td colspan="7" class="empty">No products yet.</td></tr>'; return; }
-  tbody.innerHTML = PRODUCTS.map(p => `
-    <tr>
-      <td><img class="thumb" src="${normalizeImageUrl(p.images && p.images[0])}" onerror="this.style.opacity=0"></td>
-      <td>${escapeHtml(p.title)}</td>
-      <td>${escapeHtml(p.category)}</td>
-      <td>EGP ${Number(p.price||0).toLocaleString()}</td>
-      <td>${p.stock}</td>
-      <td><span class="status-pill ${String(p.status).toLowerCase()==='active'?'status-active':'status-inactive'}">${escapeHtml(p.status||'Active')}</span></td>
-      <td class="row-actions">
-        <button class="btn ghost" onclick="editProduct('${p.id}')">EDIT</button>
-        <button class="btn ghost" onclick="deleteProductRow('${p.id}')">DELETE</button>
-      </td>
-    </tr>`).join('');
-}
-
-function escapeHtml(v){ return String(v??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-
-let editingId = null;
-function openProductModal(){ document.getElementById('productModalBackdrop').classList.add('open'); }
-function closeProductModal(){ document.getElementById('productModalBackdrop').classList.remove('open'); }
-
-document.getElementById('addProductBtn').onclick = () => {
-  editingId = null;
-  document.getElementById('productModalTitle').textContent = 'Add Product';
-  ['f_title','f_price','f_stock','f_description','f_color','f_sizes','f_image1','f_image2','f_image3'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('f_category').value='Dresses';
-  document.getElementById('f_featured').value='false';
-  document.getElementById('f_status').value='Active';
-  openProductModal();
-};
-
-window.editProduct = function(id){
-  const p = PRODUCTS.find(x => String(x.id) === String(id));
-  if (!p) return;
-  editingId = p.externalId || p.id;
-  document.getElementById('productModalTitle').textContent = 'Edit Product';
-  document.getElementById('f_title').value = p.title || p.name || '';
-  document.getElementById('f_category').value = p.category || 'Dresses';
-  document.getElementById('f_price').value = p.price || 0;
-  document.getElementById('f_stock').value = p.stock || 0;
-  document.getElementById('f_description').value = p.description || '';
-  document.getElementById('f_color').value = p.color || '';
-  document.getElementById('f_sizes').value = (p.sizes||[]).join(', ');
-  document.getElementById('f_image1').value = (p.originalImages && p.originalImages[0]) || (p.images && p.images[0]) || '';
-  document.getElementById('f_image2').value = (p.originalImages && p.originalImages[1]) || '';
-  document.getElementById('f_image3').value = (p.originalImages && p.originalImages[2]) || '';
-  document.getElementById('f_featured').value = p.featured ? 'true' : 'false';
-  document.getElementById('f_status').value = p.status || 'Active';
-  openProductModal();
-};
-
-window.deleteProductRow = async function(id){
-  const p = PRODUCTS.find(x => String(x.id) === String(id));
-  if (!p) return;
-  if (!confirm(`Delete "${p.title||p.name}"? This removes it from every page.`)) return;
-  const data = await post('deleteProduct', { id: p.externalId || p.id });
-  if (data.success){ toast('Product deleted'); loadProducts(); }
-  else toast('Error: ' + (data.error||'could not delete'), true);
-};
-
-document.getElementById('cancelProductBtn').onclick = closeProductModal;
-document.getElementById('saveProductBtn').onclick = async () => {
-  const btn = document.getElementById('saveProductBtn');
-  const product = {
-    id: editingId || '',
-    title: document.getElementById('f_title').value.trim(),
-    category: document.getElementById('f_category').value,
-    price: document.getElementById('f_price').value,
-    stock: document.getElementById('f_stock').value,
-    description: document.getElementById('f_description').value.trim(),
-    color: document.getElementById('f_color').value.trim(),
-    sizes: document.getElementById('f_sizes').value.trim(),
-    image1: document.getElementById('f_image1').value.trim(),
-    image2: document.getElementById('f_image2').value.trim(),
-    image3: document.getElementById('f_image3').value.trim(),
-    featured: document.getElementById('f_featured').value === 'true',
-    status: document.getElementById('f_status').value
-  };
-  if (!product.title){ toast('Title is required', true); return; }
-  btn.disabled = true; btn.textContent = 'SAVING…';
-  try {
-    const data = await post('saveProduct', product);
-    if (data.success){ toast('Saved ✓'); closeProductModal(); loadProducts(); }
-    else toast('Error: ' + (data.error||'could not save'), true);
-  } catch (err) {
-    console.error(err);
-    toast('Unexpected error — see console (F12)', true);
-  } finally {
-    btn.disabled = false; btn.textContent = 'SAVE';
-  }
-};
-
-/* ---------- homepage / collection image cards ---------- */
-const IMAGE_KEYS = [
-  { key: 'dresses', label: 'Dresses' },
-  { key: 'clothing', label: 'Clothing' },
-  { key: 'accessories', label: 'Accessories' }
-];
-
-async function loadImageSet(action, containerId, saveAction){
-  const data = await jsonp(action);
-  const images = (data && data.success) ? data.images : {};
-  const container = document.getElementById(containerId);
-  container.innerHTML = IMAGE_KEYS.map(({key,label}) => {
-    const entry = images[key] || { image:'', alt:'', title:'' };
-    return `
-    <div class="icon-card" data-key="${key}">
-      <img src="${normalizeImageUrl(entry.image)}" onerror="this.style.opacity=0">
-      <label>${label} — Image URL / Drive link</label>
-      <input class="i-image" value="${escapeHtml(entry.image)}">
-      <label>Title</label>
-      <input class="i-title" value="${escapeHtml(entry.title)}">
-      <label>Alt text</label>
-      <input class="i-alt" value="${escapeHtml(entry.alt)}">
-      <label>Status</label>
-      <select class="i-status"><option ${entry.status!=='inactive'?'selected':''}>Active</option><option ${entry.status==='inactive'?'selected':''}>Inactive</option></select>
-      <button class="btn">SAVE ${label.toUpperCase()}</button>
-    </div>`;
-  }).join('');
-
-  container.querySelectorAll('.icon-card').forEach(card => {
-    const key = card.dataset.key;
-    const img = card.querySelector('img');
-    const imageInput = card.querySelector('.i-image');
-    imageInput.addEventListener('input', () => { img.src = normalizeImageUrl(imageInput.value.trim()); });
-    card.querySelector('.btn').onclick = async () => {
-      const btn = card.querySelector('.btn');
-      const payload = {
-        key,
-        image: imageInput.value.trim(),
-        title: card.querySelector('.i-title').value.trim(),
-        alt: card.querySelector('.i-alt').value.trim(),
-        status: card.querySelector('.i-status').value
-      };
-      btn.disabled = true;
-      try {
-        const data = await post(saveAction, payload);
-        if (data.success) toast('Saved ✓');
-        else toast('Error: ' + (data.error||'could not save'), true);
-      } catch (err) {
-        console.error(err);
-        toast('Unexpected error — see console (F12)', true);
-      } finally {
-        btn.disabled = false;
-      }
-    };
-  });
-}
-
-function loadEverything(){
-  loadProducts();
-  loadImageSet('homepageImages', 'homepageImages', 'saveHomepageImage');
-  loadImageSet('collectionImages', 'collectionImages', 'saveCollectionImage');
-}
+function getDriveId(v){const s=String(v||'').trim();const p=[/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/,/[?&]id=([a-zA-Z0-9_-]+)/,/drive\.google\.com\/thumbnail\?id=([a-zA-Z0-9_-]+)/];for(const re of p){const m=s.match(re);if(m)return m[1]}return''}
+function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+async function adminFetch(path,options={}){if(!SESSION)throw new Error('Please sign in.');return sbFetchWithToken(path,SESSION.access_token,options)}
+async function isAdmin(){const rows=await adminFetch('/admin_users?select=user_id&user_id=eq.'+encodeURIComponent(SESSION.user.id));return Array.isArray(rows)&&rows.length>0}
+async function login(){const email=document.getElementById('pwInput').dataset.email||prompt('ROUGE admin email');const password=document.getElementById('pwInput').value.trim();if(!email||!password){toast('Email and password are required.',true);return}const result=await supaAdmin.auth.signInWithPassword({email:email.trim(),password});if(result.error){toast(result.error.message,true);return}SESSION=result.data.session;if(!(await isAdmin())){await supaAdmin.auth.signOut();SESSION=null;toast('This account is not an ROUGE admin.',true);return}document.getElementById('loginGate').style.display='none';loadEverything()}
+document.getElementById('pwSubmit').onclick=login;document.getElementById('pwInput').addEventListener('keydown',e=>{if(e.key==='Enter')login()});
+// The existing gate has one password field. Ask for email once and retain it for the session.
+const gateNote=document.querySelector('#loginGate p');if(gateNote){const email=document.createElement('input');email.id='adminEmail';email.type='email';email.placeholder='Admin email';email.style.cssText='width:100%;box-sizing:border-box;margin:10px 0;padding:12px';const pw=document.getElementById('pwInput');pw.dataset.email='';pw.parentNode.insertBefore(email,pw);email.addEventListener('input',()=>pw.dataset.email=email.value.trim())}
+async function loadProducts(){try{PRODUCTS=await adminFetch('/products?select=*&order=created_at.asc');renderProducts()}catch(e){toast(e.message,true)}}
+function renderProducts(){const tbody=document.getElementById('productRows');if(!PRODUCTS.length){tbody.innerHTML='<tr><td colspan="7" class="empty">No products yet.</td></tr>';return}tbody.innerHTML=PRODUCTS.map(p=>`<tr><td><img class="thumb" src="${normalizeImageUrl(p.image1)}" onerror="this.style.opacity=0"></td><td>${escapeHtml(p.title||p.name)}</td><td>${escapeHtml(p.category)}</td><td>EGP ${Number(p.price||0).toLocaleString()}</td><td>${p.stock}</td><td><span class="status-pill ${String(p.status).toLowerCase()==='active'?'status-active':'status-inactive'}">${escapeHtml(p.status||'Active')}</span></td><td class="row-actions"><button class="btn ghost" onclick="editProduct('${p.id}')">EDIT</button><button class="btn ghost" onclick="deleteProductRow('${p.id}')">DELETE</button></td></tr>`).join('')}
+let editingId=null;function openProductModal(){document.getElementById('productModalBackdrop').classList.add('open')}function closeProductModal(){document.getElementById('productModalBackdrop').classList.remove('open')}
+document.getElementById('addProductBtn').onclick=()=>{editingId=null;document.getElementById('productModalTitle').textContent='Add Product';['f_title','f_price','f_stock','f_description','f_color','f_sizes','f_image1','f_image2','f_image3'].forEach(id=>document.getElementById(id).value='');document.getElementById('f_category').value='Dresses';document.getElementById('f_featured').value='false';document.getElementById('f_status').value='Active';openProductModal()};
+window.editProduct=function(id){const p=PRODUCTS.find(x=>String(x.id)===String(id));if(!p)return;editingId=p.id;document.getElementById('productModalTitle').textContent='Edit Product';document.getElementById('f_title').value=p.title||p.name||'';document.getElementById('f_category').value=p.category||'Dresses';document.getElementById('f_price').value=p.price||0;document.getElementById('f_stock').value=p.stock||0;document.getElementById('f_description').value=p.description||'';document.getElementById('f_color').value=p.color||'';document.getElementById('f_sizes').value=p.sizes||'';document.getElementById('f_image1').value=p.image1||'';document.getElementById('f_image2').value=p.image2||'';document.getElementById('f_image3').value=p.image3||'';document.getElementById('f_featured').value=p.featured?'true':'false';document.getElementById('f_status').value=p.status||'Active';openProductModal()};
+window.deleteProductRow=async function(id){const p=PRODUCTS.find(x=>String(x.id)===String(id));if(!p||!confirm(`Delete "${p.title||p.name}"? This removes it from every page.`))return;try{await adminFetch('/products?id=eq.'+encodeURIComponent(id),{method:'DELETE'});toast('Product deleted');loadProducts()}catch(e){toast('Error: '+e.message,true)}};
+document.getElementById('cancelProductBtn').onclick=closeProductModal;
+async function syncAssignments(product){const all=await adminFetch('/product_page_assignments?select=page_key,sort_order&product_id=eq.'+encodeURIComponent(product.id));const old={};(all||[]).forEach(x=>old[x.page_key]=Number(x.sort_order||0));const cat=String(product.category||'').toLowerCase(),featured=!!product.featured;const wants={collections:true,'new-in':featured,dresses:['dresses','evening'].includes(cat),clothing:cat==='clothing',accessories:cat==='accessories'};await adminFetch('/product_page_assignments?product_id=eq.'+encodeURIComponent(product.id),{method:'DELETE'});const rows=[];for(const page of Object.keys(wants)){if(!wants[page])continue;let sort=old[page];if(!sort){const existing=await adminFetch('/product_page_assignments?select=sort_order&page_key=eq.'+encodeURIComponent(page)+'&order=sort_order.desc&limit=1');sort=existing?.[0]?.sort_order?Number(existing[0].sort_order)+1:1}rows.push({product_id:product.id,page_key:page,sort_order:sort,override_title:product.title,override_image:product.image1||''})}if(rows.length)await adminFetch('/product_page_assignments',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(rows)})}
+document.getElementById('saveProductBtn').onclick=async()=>{const btn=document.getElementById('saveProductBtn');const product={id:editingId||'',title:document.getElementById('f_title').value.trim(),name:document.getElementById('f_title').value.trim(),category:document.getElementById('f_category').value,price:Number(document.getElementById('f_price').value||0),stock:Number(document.getElementById('f_stock').value||0),description:document.getElementById('f_description').value.trim(),color:document.getElementById('f_color').value.trim(),sizes:document.getElementById('f_sizes').value.trim(),image1:document.getElementById('f_image1').value.trim(),image2:document.getElementById('f_image2').value.trim(),image3:document.getElementById('f_image3').value.trim(),featured:document.getElementById('f_featured').value==='true',status:document.getElementById('f_status').value};if(!product.title){toast('Title is required',true);return}if(!product.id){const max=PRODUCTS.reduce((m,p)=>Math.max(m,Number(String(p.id).match(/\d+/)?.[0]||0)),0);product.id='R'+String(max+1).padStart(3,'0')}btn.disabled=true;btn.textContent='SAVING…';try{await adminFetch('/products?on_conflict=id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(product)});await syncAssignments(product);toast('Saved ✓');closeProductModal();await loadProducts()}catch(e){toast('Error: '+e.message,true)}finally{btn.disabled=false;btn.textContent='SAVE'}};
+const IMAGE_KEYS=[{key:'dresses',label:'Dresses'},{key:'clothing',label:'Clothing'},{key:'accessories',label:'Accessories'}];
+async function loadImageSet(table,containerId){const images=await adminFetch('/'+table+'?select=*');const map={};(images||[]).forEach(x=>map[x.key]=x);const container=document.getElementById(containerId);container.innerHTML=IMAGE_KEYS.map(({key,label})=>{const e=map[key]||{image:'',alt:'',title:'',status:'Active'};return `<div class="icon-card" data-key="${key}"><img src="${normalizeImageUrl(e.image)}" onerror="this.style.opacity=0"><label>${label} — Image URL / Drive link</label><input class="i-image" value="${escapeHtml(e.image)}"><label>Title</label><input class="i-title" value="${escapeHtml(e.title)}"><label>Alt text</label><input class="i-alt" value="${escapeHtml(e.alt)}"><label>Status</label><select class="i-status"><option ${e.status!=='inactive'?'selected':''}>Active</option><option ${e.status==='inactive'?'selected':''}>Inactive</option></select><button class="btn">SAVE ${label.toUpperCase()}</button></div>`}).join('');container.querySelectorAll('.icon-card').forEach(card=>{const key=card.dataset.key,img=card.querySelector('img'),imageInput=card.querySelector('.i-image');imageInput.addEventListener('input',()=>img.src=normalizeImageUrl(imageInput.value.trim()));card.querySelector('.btn').onclick=async()=>{const btn=card.querySelector('.btn');btn.disabled=true;try{await adminFetch('/'+table+'?on_conflict=key',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({key,image:imageInput.value.trim(),title:card.querySelector('.i-title').value.trim(),alt:card.querySelector('.i-alt').value.trim(),status:card.querySelector('.i-status').value,updated_at:new Date().toISOString()})});toast('Saved ✓')}catch(e){toast('Error: '+e.message,true)}finally{btn.disabled=false}}})}
+function loadEverything(){loadProducts();loadImageSet('homepage_images','homepageImages');loadImageSet('collection_page_images','collectionImages')}
 </script>
 </body>
 </html>
