@@ -16,8 +16,11 @@ async function sbFetch(path, options = {}) {
   let data = null;
   try { data = text ? JSON.parse(text) : null; } catch { data = text; }
   if (!response.ok) {
-    const message = data?.message || data?.error_description || data?.hint || data?.details || 'Supabase request failed';
-    throw new Error(message);
+    const message = data?.message || data?.error_description || data?.hint || data?.details || (typeof data === 'string' ? data : '') || 'Supabase request failed';
+    const error = new Error(`${message} (HTTP ${response.status})`);
+    error.status = response.status;
+    error.details = data;
+    throw error;
   }
   return data;
 }
