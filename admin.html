@@ -107,8 +107,56 @@ const supaAdmin=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);let
 function toast(msg,isError){const t=document.getElementById('toast');t.style.background=isError?'#7a1a1a':'#1a1a1a';t.textContent=msg;t.style.opacity='1';clearTimeout(t._timer);t._timer=setTimeout(()=>t.style.opacity='0',2400)}
 async function adminFetch(path,options={}){if(!SESSION)throw new Error('Please sign in.');return sbFetchWithToken(path,SESSION.access_token,options)}
 async function isAdmin(){const rows=await adminFetch('/admin_users?select=user_id&user_id=eq.'+encodeURIComponent(SESSION.user.id));return rows?.length>0}
-async function login(){const email=document.getElementById('pwInput').dataset.email||prompt('ROUGE admin email');const password=document.getElementById('pwInput').value.trim();if(!email||!password){toast('Email and password are required.',true);return}const r=await supaAdmin.auth.signInWithPassword({email:email.trim(),password});if(r.error){toast(r.error.message,true);return}SESSION=r.data.session;if(!(await isAdmin())){await supaAdmin.auth.signOut();SESSION=null;toast('This account is not an ROUGE admin.',true);return}document.getElementById('loginGate').style.display='none';await Promise.all([loadOrders(),loadStockKpi()])}
-document.getElementById('pwSubmit').onclick=login;document.getElementById('pwInput').addEventListener('keydown',e=>{if(e.key==='Enter')login()});const gateNote=document.querySelector('#loginGate p');if(gateNote){const email=document.createElement('input');email.type='email';email.placeholder='Admin email';email.style.cssText='width:100%;box-sizing:border-box;margin:10px 0;padding:12px';const pw=document.getElementById('pwInput');pw.dataset.email='';pw.parentNode.insertBefore(email,pw);email.addEventListener('input',()=>pw.dataset.email=email.value.trim())}
+
+async function login() {
+  const email =
+    document.getElementById('pwInput').dataset.email ||
+    prompt('ROUGE admin email');
+
+  const password = document.getElementById('pwInput').value;
+
+  if (!email || !password) {
+    toast('Email and password are required.', true);
+    return;
+  }
+
+  try {
+    const { data, error } = await supaAdmin.auth.signInWithPassword({
+      email: email.trim(),
+      password: password
+    });
+
+    if (error) {
+      console.error('Login error:', error);
+      toast('Login failed: ' + error.message, true);
+      return;
+    }
+
+    SESSION = data.session;
+
+    console.log('Auth successful:', data.user?.id);
+
+    const admin = await isAdmin();
+
+    console.log('Is admin:', admin);
+
+    if (!admin) {
+      await supaAdmin.auth.signOut();
+      SESSION = null;
+      toast('This account is not an ROUGE admin.', true);
+      return;
+    }
+
+    document.getElementById('loginGate').style.display = 'none';
+
+    await Promise.all([loadOrders(), loadStockKpi()]);
+
+  } catch (err) {
+    console.error('Login process error:', err);
+    toast('Error: ' + (err.message || String(err)), true);
+  }
+}
+
 async function loadOrders(){try{ORDERS=await adminFetch('/orders?select=*&order=order_date.desc');renderOrders()}catch(e){toast('Error: '+e.message,true)}}
 async function loadStockKpi(){try{PRODUCTS=await adminFetch('/products?select=id,name,stock,status');const active=PRODUCTS.filter(p=>String(p.status).toLowerCase()==='active');const low=active.filter(p=>Number(p.stock)<=5).length;const el=document.getElementById('stockKpi');if(el)el.textContent=low+' LOW STOCK'}catch(e){}}
 function renderOrders(){const tbody=document.getElementById('orderRows');if(!tbody)return;if(!ORDERS.length){tbody.innerHTML='<tr><td colspan="8" class="empty">No orders yet.</td></tr>';return}tbody.innerHTML=ORDERS.map(o=>`<tr><td>${escapeHtml(o.order_number)}</td><td>${escapeHtml(o.full_name)}</td><td>${escapeHtml(o.email)}</td><td>EGP ${Number(o.total||0).toLocaleString()}</td><td>${escapeHtml(o.status||'Pending')}</td><td>${escapeHtml(o.city||'')}</td><td>${escapeHtml(o.payment||'')}</td><td><button class="btn ghost" onclick="openOrder('${escapeHtml(o.order_number)}')">VIEW</button></td></tr>`).join('')}
